@@ -18,6 +18,7 @@ schemes:
       targets:
         Trashcall: all
         TrashcallCallDirectory: all
+        TrashcallBlockDirectory: all
         TrashcallCore: all
     run:
       config: Debug
@@ -52,6 +53,7 @@ targets:
       - target: TrashcallCore
         embed: true
       - target: TrashcallCallDirectory
+      - target: TrashcallBlockDirectory
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.trashcall.app
@@ -59,8 +61,8 @@ targets:
         INFOPLIST_FILE: App/Resources/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CURRENT_PROJECT_VERSION: 10
-        MARKETING_VERSION: 1.1.1
+        CURRENT_PROJECT_VERSION: 11
+        MARKETING_VERSION: 1.1.2
 
   TrashcallCallDirectory:
     type: app-extension
@@ -81,5 +83,27 @@ targets:
         INFOPLIST_FILE: Extensions/CallDirectory/Resources/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CURRENT_PROJECT_VERSION: 10
-        MARKETING_VERSION: 1.1.1
+        CURRENT_PROJECT_VERSION: 11
+        MARKETING_VERSION: 1.1.2
+
+  TrashcallBlockDirectory:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Extensions/BlockDirectory/Sources
+      - path: Extensions/BlockDirectory/Resources/Info.plist
+      - path: App/Resources/Assets.xcassets
+    dependencies:
+      - target: TrashcallCore
+        embed: false
+      - sdk: CallKit.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.trashcall.app.BlockDirectoryExtension
+        CODE_SIGN_ENTITLEMENTS: Extensions/BlockDirectory/BlockDirectory.entitlements
+        INFOPLIST_FILE: Extensions/BlockDirectory/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CURRENT_PROJECT_VERSION: 11
+        MARKETING_VERSION: 1.1.2

@@ -55,11 +55,11 @@ func runSuite() async {
     test("RuleExpander Wildcard & Bound Protection") {
         let expander = RuleExpander(maxAllowedNumbersPerRule: 2_000)
 
-        // Expand 95211*** (1,000 numbers)
+        // Expand 95211*** (national 95211000-95211999 + E.164 8695211000-8695211999)
         let numbers = try expander.expandWildcard("95211***", defaultCountryCode: 86)
-        assert(numbers.count == 1000, "Expected 1000 numbers, got \(numbers.count)")
-        assert(numbers.first?.rawValue == 8695211000, "First must be 8695211000")
-        assert(numbers.last?.rawValue == 8695211999, "Last must be 8695211999")
+        assert(numbers.count == 2000, "Expected 2000 numbers (dual form), got \(numbers.count)")
+        assert(numbers.first?.rawValue == 95211000, "First must be national form 95211000, got \(String(describing: numbers.first?.rawValue))")
+        assert(numbers.last?.rawValue == 8695211999, "Last must be E.164 form 8695211999")
 
         // Exceeding limit: 95****** (1,000,000 numbers > 2,000 limit)
         var caughtError = false
@@ -151,7 +151,7 @@ func runSuite() async {
 
         let expander = RuleExpander()
         let numbers = try expander.expandWildcard("95211***").map { $0.rawValue }
-        assert(numbers.count == 1000)
+        assert(numbers.count == 2000, "Dual form: national + E.164, got \(numbers.count)")
 
         let rule = ActiveRuleItem(
             pattern: "95211***",
@@ -161,7 +161,7 @@ func runSuite() async {
         )
 
         try store.addUserRule(rule, numbers: numbers)
-        assert(store.countIdentification() == 1000, "Identification numbers should have been inserted")
+        assert(store.countIdentification() == 2000, "Identification numbers should have been inserted (dual form)")
         assert(store.countBlocking() == 0)
 
         let fetchedRules = try store.getUserRules()
@@ -180,16 +180,30 @@ func runSuite() async {
         assert(PatternInput.resolved("18964046784") == "18964046784", "WHY: a complete mobile stays exact")
         assert(PatternInput.resolved("9521****") == "9521****")
         assert(PatternInput.resolved("400123") == "400123****")
+        // Mobile prefix gap of 5 should pad to the full 11-digit national length
+        assert(PatternInput.resolved("192804") == "192804*****", "WHY: mobile prefixes must reach 11 digits")
+        // Too-short prefix must NOT mispad; expander should reject explicitly
+        assert(PatternInput.resolved("95") == "95", "WHY: 6-digit gap on 95 would mispad to a 6-digit range that matches no real number")
+        assert(PatternInput.resolved("13") == "13")
 
         let expander = RuleExpander()
         let fromPrefix = try expander.expandWildcard("9521")
         let fromStars = try expander.expandWildcard("9521****")
-        assert(fromPrefix.count == 10_000, "WHY: 9521 is the 9521**** 号段, got \(fromPrefix.count)")
+        assert(fromPrefix.count == 20_000, "WHY: dual-form 9521 covers 10k national + 10k E.164, got \(fromPrefix.count)")
         assert(fromPrefix.map(\.rawValue) == fromStars.map(\.rawValue))
         let prefixEstimate = try expander.estimateCount("9521")
-        assert(prefixEstimate == 10_000)
+        assert(prefixEstimate == 20_000)
         let exactForms = try expander.expandWildcard("18964046784").map(\.rawValue)
         assert(Set(exactForms) == [18964046784, 8618964046784])
+
+        // Mobile segment rules must include BOTH the 11-digit national range AND
+        // the 13-digit E.164 range so calls presented without the country code still match.
+        let segment = try expander.expandWildcard("192804").map(\.rawValue)
+        assert(segment.count == 200_000, "WHY: 192804 should cover 100k national + 100k E.164, got \(segment.count)")
+        assert(segment.contains(19280412345), "WHY: a 11-digit national 192804xxxxx number must be inside the registered range")
+        assert(segment.contains(8619280412345), "WHY: a 13-digit E.164 86192804xxxxx number must be inside the registered range")
+        assert(segment.first == 19280400000)
+        assert(segment.last == 8619280499999)
 
         let tempDir = FileManager.default.temporaryDirectory
         let dbFile = tempDir.appendingPathComponent("test_trashcall_user_189_\(UUID().uuidString).sqlite")
@@ -267,6 +281,38 @@ func runSuite() async {
         try CallDirectoryFeeder().feed(kind: .identificationOnly, from: store, into: mock)
         assert(mock.addedBlocking.isEmpty)
         assert(mock.addedIdentification.map(\.phoneNumber) == [8613800138000])
+    }
+
+    test("Blocking-only and identification-only feeds are homogeneous (iOS 26/27 mixed-request suppression)") {
+        // WHY: iOS 26/27 drops addBlockingEntry when the same request also carries
+        // identification entries. The production split is identify-ext = .identificationOnly
+        // and block-ext = .blockingOnly; neither request may ever mix the two kinds.
+        let tempDir = FileManager.default.temporaryDirectory
+        let dbFile = tempDir.appendingPathComponent("test_feed_split_\(UUID().uuidString).sqlite")
+        defer {
+            try? FileManager.default.removeItem(at: dbFile)
+            try? FileManager.default.removeItem(atPath: dbFile.path + "-wal")
+            try? FileManager.default.removeItem(atPath: dbFile.path + "-shm")
+        }
+        let store = CallDirectoryStore(databaseURL: dbFile)
+        try store.open()
+        try store.initializeSchema()
+        try store.insertIdentificationBatch([
+            IdentificationEntry(phoneNumber: 8613800138000, label: "银行")
+        ])
+        try store.insertBlockingBatch([8618964046784, 18964046784])
+
+        let blockMock = MockCallDirectoryContext()
+        try CallDirectoryFeeder().feed(kind: .blockingOnly, from: store, into: blockMock)
+        assert(blockMock.addedBlocking == [18964046784, 8618964046784], "block feed must carry every blocking number, ascending")
+        assert(blockMock.addedIdentification.isEmpty, "WHY: a mixed request gets its blocking entries dropped on iOS 26/27")
+        assert(blockMock.isCompleted)
+
+        let identifyMock = MockCallDirectoryContext()
+        try CallDirectoryFeeder().feed(kind: .identificationOnly, from: store, into: identifyMock)
+        assert(identifyMock.addedIdentification.map(\.phoneNumber) == [8613800138000])
+        assert(identifyMock.addedBlocking.isEmpty, "WHY: identify extension must never submit blocking entries")
+        assert(identifyMock.isCompleted)
     }
 
     test("User can add blocking rule and stream via .full feed mode with strict ordering") {

@@ -1,9 +1,15 @@
 import Foundation
 
 /// Turns a typed prefix into a wildcard pattern so users don't have to type asterisks.
-/// Complete numbers stay exact. Prefixes are padded with at most 4 `*` (10_000 numbers).
+/// Complete numbers stay exact. Prefixes are padded up to their typical full length
+/// (e.g. 9521 → 9521****, 192804 → 192804*****).
+///
+/// Padding only happens when the gap to the typical length is ≤ `maxAutoWildcardDigits`.
+/// A bigger gap (e.g. "95", "13") is left unpadded so the expander rejects it with a
+/// clear "too broad" error — previously such prefixes were silently padded to a
+/// WRONG length (e.g. "95" → 95****, a 6-digit range that matches no real number).
 public enum PatternInput: Sendable {
-    public static let maxAutoWildcardDigits = 4
+    public static let maxAutoWildcardDigits = 5
 
     public static func resolved(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -18,9 +24,10 @@ public enum PatternInput: Sendable {
         }
         let target = typicalLength(digits)
         let missing = max(0, target - digits.count)
-        let stars = min(missing, maxAutoWildcardDigits)
-        guard stars > 0 else { return trimmed }
-        return digits + String(repeating: "*", count: stars)
+        // Pad only when the gap is small; a large gap means the prefix is too broad
+        // to guess and must be rejected explicitly instead of producing a misaligned range.
+        guard missing >= 1, missing <= maxAutoWildcardDigits else { return trimmed }
+        return digits + String(repeating: "*", count: missing)
     }
 
     public static func isCompleteNumber(_ digits: String) -> Bool {
@@ -53,6 +60,6 @@ public enum PatternInput: Sendable {
             if digits.hasPrefix("010") || digits.hasPrefix("02") { return 11 }
             return 12
         }
-        return digits.count + maxAutoWildcardDigits
+        return digits.count + 4
     }
 }

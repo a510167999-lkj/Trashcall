@@ -23,21 +23,27 @@ public enum RuleExpansionError: Error, LocalizedError {
 public struct RuleExpander: Sendable {
     public let maxAllowedNumbersPerRule: Int64
 
-    public init(maxAllowedNumbersPerRule: Int64 = 50_000) {
+    public init(maxAllowedNumbersPerRule: Int64 = 100_000) {
         self.maxAllowedNumbersPerRule = maxAllowedNumbersPerRule
     }
 
     /// Expands a wildcard string (e.g. "+86 9521****", "0108888****") into an array of normalized PhoneNumber.
     /// Digit-only prefixes such as `9521` are first resolved to `9521****`.
+    /// Mobile segment rules expand to BOTH the national form (e.g. 19280400000…19280499999)
+    /// and the E.164 form (8619280400000…8619280499999) because Chinese carriers often
+    /// present incoming calls without the country code prefix.
     public func expandWildcard(_ pattern: String, defaultCountryCode: Int = 86) throws -> [PhoneNumber] {
         switch try expansionPlan(pattern, defaultCountryCode: defaultCountryCode) {
         case .exact(let entries):
             return entries
-        case .closedRange(let start, let end):
+        case .closedRanges(let ranges):
             var results: [PhoneNumber] = []
-            results.reserveCapacity(Int(end - start + 1))
-            for num in start...end {
-                results.append(PhoneNumber(rawValue: num))
+            for range in ranges {
+                let count = Int(range.end - range.start + 1)
+                results.reserveCapacity(results.count + count)
+                for num in range.start...range.end {
+                    results.append(PhoneNumber(rawValue: num))
+                }
             }
             return results
         }
@@ -48,14 +54,14 @@ public struct RuleExpander: Sendable {
         switch try expansionPlan(pattern, defaultCountryCode: defaultCountryCode) {
         case .exact(let entries):
             return entries.count
-        case .closedRange(let start, let end):
-            return Int(end - start + 1)
+        case .closedRanges(let ranges):
+            return ranges.reduce(0) { $0 + Int($1.end - $1.start + 1) }
         }
     }
 
     private enum ExpansionPlan {
         case exact([PhoneNumber])
-        case closedRange(start: Int64, end: Int64)
+        case closedRanges([(start: Int64, end: Int64)])
     }
 
     private func expansionPlan(_ pattern: String, defaultCountryCode: Int) throws -> ExpansionPlan {
@@ -96,15 +102,35 @@ public struct RuleExpander: Sendable {
             throw RuleExpansionError.invalidRange(start: startNum.rawValue, end: endNum.rawValue)
         }
 
-        let count = endNum.rawValue - startNum.rawValue + 1
-        guard count <= maxAllowedNumbersPerRule else {
-            throw RuleExpansionError.patternTooBroad(
-                estimatedCount: count,
-                maximumAllowed: maxAllowedNumbersPerRule
-            )
+        var ranges: [(start: Int64, end: Int64)] = [(startNum.rawValue, endNum.rawValue)]
+
+        // Dual-form registration for segment rules: also cover the national (no country
+        // code) presentation, mirroring `PhoneNumber.callKitEntries` for exact numbers.
+        // Without this, a segment rule only matches when the carrier sends the full
+        // E.164 form — Chinese mobiles are frequently presented as 11 national digits.
+        let cc = String(defaultCountryCode)
+        let startDigits = String(startNum.rawValue)
+        let endDigits = String(endNum.rawValue)
+        if startDigits.hasPrefix(cc), endDigits.hasPrefix(cc) {
+            let nationalStart = String(startDigits.dropFirst(cc.count))
+            let nationalEnd = String(endDigits.dropFirst(cc.count))
+            if nationalStart.count >= 7, nationalStart.count == nationalEnd.count,
+               let ns = Int64(nationalStart), let ne = Int64(nationalEnd), ns > 0, ns <= ne {
+                ranges.append((ns, ne))
+            }
         }
 
-        return .closedRange(start: startNum.rawValue, end: endNum.rawValue)
+        for range in ranges {
+            let count = range.end - range.start + 1
+            guard count <= maxAllowedNumbersPerRule else {
+                throw RuleExpansionError.patternTooBroad(
+                    estimatedCount: count,
+                    maximumAllowed: maxAllowedNumbersPerRule
+                )
+            }
+        }
+
+        return .closedRanges(ranges.sorted { $0.start < $1.start })
     }
 
     /// Expands a NumberPattern into discrete numbers.

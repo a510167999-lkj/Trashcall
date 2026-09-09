@@ -65,6 +65,9 @@ open class TrashcallCallDirectoryProvider: CXCallDirectoryProvider {
             case .userBlockingOnly:
                 report.blockingFed = store.countUserBlocking()
                 report.identificationFed = 0
+            case .blockingOnly:
+                report.blockingFed = store.countBlocking()
+                report.identificationFed = 0
             case .full:
                 report.blockingFed = store.countBlocking()
                 report.identificationFed = store.countIdentification()

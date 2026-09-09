@@ -43,8 +43,11 @@ public struct AddBlockNumberIntent: AppIntent {
         )
         try store.addUserRule(rule, numbers: numbers)
 
-        let manager = CallDirectoryManagerService(extensionBundleIdentifier: TrashcallExtensionID.identification)
-        try? await manager.reloadExtension()
+        // 挂断条目由专用挂断扩展注入：两个扩展都需要重载
+        for identifier in TrashcallExtensionID.all {
+            let manager = CallDirectoryManagerService(extensionBundleIdentifier: identifier)
+            try? await manager.reloadExtension()
+        }
 
         return .result(dialog: "已成功将 \(resolved)（\(numbers.count) 个号码）添加至 Trashcall 自动挂断黑名单！")
     }

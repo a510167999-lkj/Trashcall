@@ -5,7 +5,14 @@ import CallKit
 #endif
 
 public enum TrashcallExtensionID {
+    /// Bulk identification (labels) extension. Feeds identification numbers only.
     public static let identification = "com.trashcall.app.CallDirectoryExtension"
+    /// Dedicated hang-up (blocking) extension. Feeds blocking numbers only.
+    /// Required because iOS 26/27 drops blocking entries from mixed requests.
+    public static let blocking = "com.trashcall.app.BlockDirectoryExtension"
+
+    /// Both extensions, in reload order (identification first: cheaper failure surface).
+    public static let all: [String] = [identification, blocking]
 }
 
 /// State of the CallKit extension in the system settings.
@@ -63,7 +70,14 @@ public final class CallDirectoryManagerService: Sendable {
     }
 
     /// Triggers CallKit to reload the extension, ingesting new or updated data.
-    public func reloadExtension(maxRetries: Int = 3) async throws {
+    ///
+    /// On device, feeding hundreds of thousands of entries can keep the system busy
+    /// well beyond ten seconds. While a reload is in flight, further reload attempts
+    /// fail transiently with `CurrentlyLoading` (7) or `LoadingInterrupted` (2), so we
+    /// retry with exponential backoff (0.6s → 1.2s → 2.4s → 4s capped) for up to
+    /// ~40s before giving up. This prevents transient "策略设置失败" errors when the
+    /// user toggles a strategy while another reload is still streaming.
+    public func reloadExtension(maxAttempts: Int = 10) async throws {
         #if canImport(CallKit) && (os(iOS) || targetEnvironment(macCatalyst))
         var attempt = 0
         while true {
@@ -72,8 +86,9 @@ public final class CallDirectoryManagerService: Sendable {
                 return
             } catch {
                 attempt += 1
-                if isCurrentlyLoading(error) && attempt <= maxRetries {
-                    try await Task.sleep(for: .milliseconds(800 * attempt))
+                if isTransientLoadingError(error) && attempt < maxAttempts {
+                    let delayMs = min(600 * (1 << (attempt - 1)), 4000)
+                    try await Task.sleep(for: .milliseconds(delayMs))
                     continue
                 }
                 throw error
@@ -97,11 +112,18 @@ public final class CallDirectoryManagerService: Sendable {
         }
     }
 
-    public func isCurrentlyLoading(_ error: Error) -> Bool {
+    /// Whether the error is a transient "system is busy loading" condition that is
+    /// safe to retry. Covers both `CurrentlyLoading` (7) and `LoadingInterrupted` (2).
+    public func isTransientLoadingError(_ error: Error) -> Bool {
         let nsError = error as NSError
-        // CXErrorCodeCallDirectoryManagerError.currentlyLoading == 7
-        // Apple's domain is "com.apple.CallKit.error.calldirectorymanager" (lowercase)
-        return (nsError.domain.lowercased().contains("calldirectory") || nsError.domain.lowercased().contains("callkit")) && nsError.code == 7
+        let domain = nsError.domain.lowercased()
+        guard domain.contains("calldirectory") || domain.contains("callkit") else { return false }
+        return nsError.code == 2 || nsError.code == 7
+    }
+
+    /// Backwards-compatible alias for `isTransientLoadingError`.
+    public func isCurrentlyLoading(_ error: Error) -> Bool {
+        return isTransientLoadingError(error)
     }
     #else
     public func isCurrentlyLoading(_ error: Error) -> Bool {

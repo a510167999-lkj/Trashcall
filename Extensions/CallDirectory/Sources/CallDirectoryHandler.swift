@@ -17,11 +17,14 @@ final class CallDirectoryHandler: TrashcallCallDirectoryProvider {
         return "trashcall.sqlite"
     }
 
+    /// Homogeneous identification-only request. Blocking entries are fed by the
+    /// dedicated TrashcallBlockDirectory extension: iOS 26/27 drops blocking
+    /// entries from mixed (blocking + identification) requests.
     override var feedKind: CallDirectoryFeedKind {
-        return .full
+        return .identificationOnly
     }
 
     override var runReportFileName: String {
-        return ExtensionRunReport.defaultFileName
+        return ExtensionRunReport.identifyFileName
     }
 }

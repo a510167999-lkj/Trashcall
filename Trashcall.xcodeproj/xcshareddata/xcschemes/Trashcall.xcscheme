@@ -29,6 +29,20 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "9CE84C05A5F011F041B4DE9E"
+               BuildableName = "TrashcallBlockDirectory.appex"
+               BlueprintName = "TrashcallBlockDirectory"
+               ReferencedContainer = "container:Trashcall.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "90662D505FB3168A2F9C95D9"
                BuildableName = "TrashcallCallDirectory.appex"
                BlueprintName = "TrashcallCallDirectory"

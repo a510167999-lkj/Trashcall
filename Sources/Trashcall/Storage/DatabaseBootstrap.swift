@@ -129,6 +129,16 @@ public enum DatabaseBootstrap: Sendable {
             }
         }
 
+        // The seed import above can re-add numbers the user explicitly blocked.
+        // Blocking and identification must stay mutually exclusive: a number present
+        // in both tables produces a mixed duplicate entry, which iOS 26/27 handles
+        // by dropping the blocking entry (call still rings). Remove the overlap.
+        try? store.execute(sql: """
+        DELETE FROM identification_numbers
+        WHERE phone_number IN (SELECT phone_number FROM blocking_numbers);
+        """)
+        store.checkpoint()
+
         reapplyUserRules(store: store)
     }
 

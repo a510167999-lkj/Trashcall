@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		05622381003816CDDBECFFDB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 336FA11B74095114FAE384B1 /* Assets.xcassets */; };
+		324C0D85F851C542EFB29029 /* TrashcallBlockDirectory.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6AD86D105E25D61636369FD8 /* TrashcallBlockDirectory.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		35E443AAA5461081E7AF0ABB /* CallDirectoryProviderWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89884C7A363FE493AF650311 /* CallDirectoryProviderWrapper.swift */; };
 		3BE49DD1644E78FC828EBDC2 /* TrashcallDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06324AA222A2C2B7F5C377D /* TrashcallDashboardView.swift */; };
 		3DE1A808A429F8C36944741F /* SortedSequenceValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E4B4B51497EED93019B288 /* SortedSequenceValidator.swift */; };
@@ -15,10 +17,12 @@
 		575D39264FAAAD3F24F40FEF /* CallRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DA76DC244D98BF8EF8EBA6 /* CallRule.swift */; };
 		5CDA9CEBB54ED417EDD0D80D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 336FA11B74095114FAE384B1 /* Assets.xcassets */; };
 		5D6385DB97DCB1F8B6641A13 /* PatternInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BB0A93FE26D0304D228158B /* PatternInput.swift */; };
+		65993B08568B2B9274841380 /* TrashcallCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 81D630E3FCF957A1336A1724 /* TrashcallCore.framework */; };
 		7A1B6632F8A511DE4AA38FE0 /* CallDirectoryHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7F2A6D617BEABA58953AF0 /* CallDirectoryHandler.swift */; };
 		85C684056447B3E09EE50915 /* DeltaPackage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F291A3E20FE1BB646F49EF44 /* DeltaPackage.swift */; };
 		8FD63202BAAA714DF4954C0A /* TrashcallCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 81D630E3FCF957A1336A1724 /* TrashcallCore.framework */; };
 		AD8D18775024152F26B1B2C6 /* IncrementalEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 379B5768E6E132ABB6859B67 /* IncrementalEngine.swift */; };
+		B245DA3CAEE2A5A69A37BAF7 /* CallKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 773D01BB134F832F2105B8D2 /* CallKit.framework */; };
 		B8596E63292D6D6793017A78 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 336FA11B74095114FAE384B1 /* Assets.xcassets */; };
 		BF322B28662B08A45D2B80CA /* seed_database.sqlite in Resources */ = {isa = PBXBuildFile; fileRef = 9B088F5F33346409A93FE351 /* seed_database.sqlite */; };
 		C37F8499E15794E8599AC33E /* DatabaseBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C4F9B7A2189BBF77844906 /* DatabaseBootstrap.swift */; };
@@ -31,11 +35,19 @@
 		E73C7ACEEDC151E16C6D9C5A /* TrashcallCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 81D630E3FCF957A1336A1724 /* TrashcallCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		ED2C9DD139F9ECCCFFE9D1E6 /* CallKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 773D01BB134F832F2105B8D2 /* CallKit.framework */; };
 		EF87A33A7681782E74E4CCF2 /* TrashcallIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C50CFDEED86C4985294CA1F /* TrashcallIntents.swift */; };
+		F8E345F0B3F5C726B497F5A0 /* CallDirectoryBlockHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92B228FC5301F64769B181E2 /* CallDirectoryBlockHandler.swift */; };
 		F9AB3EC87CC222E3380D756C /* TrashcallCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 81D630E3FCF957A1336A1724 /* TrashcallCore.framework */; };
 		FB34E21014756AEDD51B1098 /* RuleExpander.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B179626E3B8DC1F83C1EB22 /* RuleExpander.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		06C9BD07F70DFE902A9E0416 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4F70FBF7CC19E1A4B2B68D0E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9CE84C05A5F011F041B4DE9E;
+			remoteInfo = TrashcallBlockDirectory;
+		};
 		367B38FC3AAE5D56F0299AA6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 4F70FBF7CC19E1A4B2B68D0E /* Project object */;
@@ -51,6 +63,13 @@
 			remoteInfo = TrashcallCallDirectory;
 		};
 		501E374512BC86B6189BE632 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4F70FBF7CC19E1A4B2B68D0E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0C811A21C5F40C9223C4A61E;
+			remoteInfo = TrashcallCore;
+		};
+		B73BB1B53B3D060805A71772 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 4F70FBF7CC19E1A4B2B68D0E /* Project object */;
 			proxyType = 1;
@@ -78,6 +97,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				DD628CB204EB5D2B9BDE1BDE /* TrashcallCallDirectory.appex in Embed Foundation Extensions */,
+				324C0D85F851C542EFB29029 /* TrashcallBlockDirectory.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -94,6 +114,7 @@
 		3D9033745ABC825D205E0F21 /* TrashcallCallDirectoryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashcallCallDirectoryProvider.swift; sourceTree = "<group>"; };
 		4BFC1C61A614AD9911E65249 /* TrashcallCallDirectory.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TrashcallCallDirectory.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		4C069B908D20595C891FE06C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		6AD86D105E25D61636369FD8 /* TrashcallBlockDirectory.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TrashcallBlockDirectory.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		773D01BB134F832F2105B8D2 /* CallKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CallKit.framework; path = System/Library/Frameworks/CallKit.framework; sourceTree = SDKROOT; };
 		78E4B4B51497EED93019B288 /* SortedSequenceValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortedSequenceValidator.swift; sourceTree = "<group>"; };
 		7BB0A93FE26D0304D228158B /* PatternInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternInput.swift; sourceTree = "<group>"; };
@@ -102,6 +123,7 @@
 		89884C7A363FE493AF650311 /* CallDirectoryProviderWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryProviderWrapper.swift; sourceTree = "<group>"; };
 		8B179626E3B8DC1F83C1EB22 /* RuleExpander.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleExpander.swift; sourceTree = "<group>"; };
 		8C50CFDEED86C4985294CA1F /* TrashcallIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashcallIntents.swift; sourceTree = "<group>"; };
+		92B228FC5301F64769B181E2 /* CallDirectoryBlockHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryBlockHandler.swift; sourceTree = "<group>"; };
 		9B088F5F33346409A93FE351 /* seed_database.sqlite */ = {isa = PBXFileReference; lastKnownFileType = file; path = seed_database.sqlite; sourceTree = "<group>"; };
 		BE78FFE8B7D9006732F08D81 /* CallDirectoryManagerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryManagerService.swift; sourceTree = "<group>"; };
 		D06324AA222A2C2B7F5C377D /* TrashcallDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashcallDashboardView.swift; sourceTree = "<group>"; };
@@ -111,9 +133,19 @@
 		F06EEB3383D060FC14EF98F7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F291A3E20FE1BB646F49EF44 /* DeltaPackage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeltaPackage.swift; sourceTree = "<group>"; };
 		FBA61680F23A8D442544F6B6 /* ExtensionRunReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionRunReport.swift; sourceTree = "<group>"; };
+		FF7D554E1E4AF8738F3D2433 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		3DD55AC0B32D91CC5832059C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				65993B08568B2B9274841380 /* TrashcallCore.framework in Frameworks */,
+				B245DA3CAEE2A5A69A37BAF7 /* CallKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		784498E50FAFEF27B7464F0C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -171,10 +203,10 @@
 		4F157FE489B747E8B12C12DB /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				7C7F2A6D617BEABA58953AF0 /* CallDirectoryHandler.swift */,
+				92B228FC5301F64769B181E2 /* CallDirectoryBlockHandler.swift */,
 			);
 			name = Sources;
-			path = Extensions/CallDirectory/Sources;
+			path = Extensions/BlockDirectory/Sources;
 			sourceTree = "<group>";
 		};
 		60F7C7E39695306D8DDB6EB6 /* Engine */ = {
@@ -212,6 +244,7 @@
 			isa = PBXGroup;
 			children = (
 				0B1ABCDEBA21657D5E678CFC /* Trashcall.app */,
+				6AD86D105E25D61636369FD8 /* TrashcallBlockDirectory.appex */,
 				4BFC1C61A614AD9911E65249 /* TrashcallCallDirectory.appex */,
 				81D630E3FCF957A1336A1724 /* TrashcallCore.framework */,
 			);
@@ -234,6 +267,15 @@
 				F06EEB3383D060FC14EF98F7 /* Info.plist */,
 			);
 			name = Resources;
+			path = Extensions/BlockDirectory/Resources;
+			sourceTree = "<group>";
+		};
+		BEFBDF0BD05AC5240FB8CFF4 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				FF7D554E1E4AF8738F3D2433 /* Info.plist */,
+			);
+			name = Resources;
 			path = Extensions/CallDirectory/Resources;
 			sourceTree = "<group>";
 		};
@@ -242,8 +284,10 @@
 			children = (
 				1107683F53D699CA81361A0F /* Resources */,
 				AFF94D1C4202B6040D256F50 /* Resources */,
+				BEFBDF0BD05AC5240FB8CFF4 /* Resources */,
 				DFC05F1F59E4B329F7201B95 /* Sources */,
 				4F157FE489B747E8B12C12DB /* Sources */,
+				F543B09632C2A8E4D5ACC3BD /* Sources */,
 				0A335F949C97754E26526F0D /* Trashcall */,
 				F975EBCB4D01969882645FED /* Frameworks */,
 				717888A2BE3D153E83B70AD4 /* Products */,
@@ -265,6 +309,15 @@
 			);
 			name = Sources;
 			path = App/Sources;
+			sourceTree = "<group>";
+		};
+		F543B09632C2A8E4D5ACC3BD /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				7C7F2A6D617BEABA58953AF0 /* CallDirectoryHandler.swift */,
+			);
+			name = Sources;
+			path = Extensions/CallDirectory/Sources;
 			sourceTree = "<group>";
 		};
 		F975EBCB4D01969882645FED /* Frameworks */ = {
@@ -315,6 +368,26 @@
 			productReference = 4BFC1C61A614AD9911E65249 /* TrashcallCallDirectory.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		9CE84C05A5F011F041B4DE9E /* TrashcallBlockDirectory */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 456D054F2BED57A2A4B826F8 /* Build configuration list for PBXNativeTarget "TrashcallBlockDirectory" */;
+			buildPhases = (
+				3B564848372BFFA57A5C4EB2 /* Sources */,
+				BB7F5764F2F52F95D7087527 /* Resources */,
+				3DD55AC0B32D91CC5832059C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4A52B35951BF1E18E089FB24 /* PBXTargetDependency */,
+			);
+			name = TrashcallBlockDirectory;
+			packageProductDependencies = (
+			);
+			productName = TrashcallBlockDirectory;
+			productReference = 6AD86D105E25D61636369FD8 /* TrashcallBlockDirectory.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		E0D354540581DC8CDE80E881 /* Trashcall */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 29129C78D5DD5DE25158CD37 /* Build configuration list for PBXNativeTarget "Trashcall" */;
@@ -330,6 +403,7 @@
 			dependencies = (
 				F7C4A28AA37B73D5E67574F9 /* PBXTargetDependency */,
 				B821BEB05CDB33485DAE3790 /* PBXTargetDependency */,
+				F3A6C7BBDAD4A8BF207538D8 /* PBXTargetDependency */,
 			);
 			name = Trashcall;
 			packageProductDependencies = (
@@ -355,6 +429,10 @@
 						DevelopmentTeam = L39339626G;
 						ProvisioningStyle = Automatic;
 					};
+					9CE84C05A5F011F041B4DE9E = {
+						DevelopmentTeam = L39339626G;
+						ProvisioningStyle = Automatic;
+					};
 					E0D354540581DC8CDE80E881 = {
 						DevelopmentTeam = L39339626G;
 						ProvisioningStyle = Automatic;
@@ -376,6 +454,7 @@
 			projectRoot = "";
 			targets = (
 				E0D354540581DC8CDE80E881 /* Trashcall */,
+				9CE84C05A5F011F041B4DE9E /* TrashcallBlockDirectory */,
 				90662D505FB3168A2F9C95D9 /* TrashcallCallDirectory */,
 				0C811A21C5F40C9223C4A61E /* TrashcallCore */,
 			);
@@ -388,6 +467,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				B8596E63292D6D6793017A78 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB7F5764F2F52F95D7087527 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				05622381003816CDDBECFFDB /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -408,6 +495,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				7A1B6632F8A511DE4AA38FE0 /* CallDirectoryHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3B564848372BFFA57A5C4EB2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F8E345F0B3F5C726B497F5A0 /* CallDirectoryBlockHandler.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -445,6 +540,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		4A52B35951BF1E18E089FB24 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0C811A21C5F40C9223C4A61E /* TrashcallCore */;
+			targetProxy = B73BB1B53B3D060805A71772 /* PBXContainerItemProxy */;
+		};
 		7A3CBD6894B4958309944308 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 0C811A21C5F40C9223C4A61E /* TrashcallCore */;
@@ -455,6 +555,11 @@
 			target = 90662D505FB3168A2F9C95D9 /* TrashcallCallDirectory */;
 			targetProxy = 4A2B4653A7977AF88A651C37 /* PBXContainerItemProxy */;
 		};
+		F3A6C7BBDAD4A8BF207538D8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9CE84C05A5F011F041B4DE9E /* TrashcallBlockDirectory */;
+			targetProxy = 06C9BD07F70DFE902A9E0416 /* PBXContainerItemProxy */;
+		};
 		F7C4A28AA37B73D5E67574F9 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 0C811A21C5F40C9223C4A61E /* TrashcallCore */;
@@ -463,6 +568,27 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		2BB61FA91193903BFFB75C8E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Extensions/BlockDirectory/BlockDirectory.entitlements;
+				CURRENT_PROJECT_VERSION = 11;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extensions/BlockDirectory/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.app.BlockDirectoryExtension;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		669310DF6CFBF45D219E774A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -493,7 +619,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/Trashcall.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -501,7 +627,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -580,7 +706,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Extensions/CallDirectory/CallDirectory.entitlements;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Extensions/CallDirectory/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -589,7 +715,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.app.CallDirectoryExtension;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -601,7 +727,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Extensions/CallDirectory/CallDirectory.entitlements;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Extensions/CallDirectory/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -610,12 +736,33 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.app.CallDirectoryExtension;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
+		};
+		DD49462E444955E2EA4E3A9E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Extensions/BlockDirectory/BlockDirectory.entitlements;
+				CURRENT_PROJECT_VERSION = 11;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extensions/BlockDirectory/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.app.BlockDirectoryExtension;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
 		};
 		EF19747F54F6CDCCF5A9F0CE /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -707,7 +854,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/Trashcall.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -715,7 +862,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -739,6 +886,15 @@
 			buildConfigurations = (
 				669310DF6CFBF45D219E774A /* Debug */,
 				F7A8677C747FC3FACDFB0AC1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		456D054F2BED57A2A4B826F8 /* Build configuration list for PBXNativeTarget "TrashcallBlockDirectory" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2BB61FA91193903BFFB75C8E /* Debug */,
+				DD49462E444955E2EA4E3A9E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

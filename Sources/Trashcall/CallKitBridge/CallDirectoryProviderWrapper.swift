@@ -95,13 +95,20 @@ public final class MockCallDirectoryContext: CallDirectoryContextProtocol, @unch
 }
 
 /// What a Call Directory extension is allowed to inject.
-/// iOS 26/27 ignores `addBlockingEntry` in an extension that also identifies callers.
+///
+/// iOS 26/27 ignores `addBlockingEntry` submitted by an extension whose request also
+/// carries identification entries. Blocking and identification must therefore be fed
+/// by two dedicated extensions, each with a homogeneous request:
+/// - identification extension → `.identificationOnly`
+/// - blocking extension       → `.blockingOnly`
 public enum CallDirectoryFeedKind: String, Sendable {
     /// Bulk labels only. Also clears any blocking this extension previously registered.
     case identificationOnly
     /// User-requested hang-up numbers only. No identification entries.
     case userBlockingOnly
-    /// Tests / legacy: both lists in one request.
+    /// Everything registered for hang-up (user rules + preset strategies). No identification entries.
+    case blockingOnly
+    /// Tests / legacy: both lists in one request. Do NOT use in production on iOS 26+.
     case full
 }
 
@@ -137,6 +144,10 @@ public struct CallDirectoryFeeder: Sendable {
             }
         case .userBlockingOnly:
             try store.streamUserBlockingNumbers { phoneNumber in
+                context.addBlockingEntry(withNextSequentialPhoneNumber: phoneNumber)
+            }
+        case .blockingOnly:
+            try store.streamBlockingNumbers { phoneNumber in
                 context.addBlockingEntry(withNextSequentialPhoneNumber: phoneNumber)
             }
         case .full:

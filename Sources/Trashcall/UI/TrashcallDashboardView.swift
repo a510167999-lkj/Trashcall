@@ -19,6 +19,8 @@ public struct TrashcallDashboardView: View {
     @State private var activeRules: [ActiveRuleItem] = []
     @State private var liveRuleIDs: Set<UUID> = []
     @State private var lastExtensionRun: ExtensionRunReport?
+    @State private var lastBlockRun: ExtensionRunReport?
+    @State private var blockingStatus: ExtensionStatus = .unknown
     @State private var appGroupReady: Bool = false
     @State private var errorMessage: String?
     @State private var successNotice: String?
@@ -40,10 +42,29 @@ public struct TrashcallDashboardView: View {
 
     public let extensionId: String
     private let manager: CallDirectoryManagerService
+    private let blockingManager: CallDirectoryManagerService
 
     public init(extensionId: String = TrashcallExtensionID.identification) {
         self.extensionId = extensionId
         self.manager = CallDirectoryManagerService(extensionBundleIdentifier: extensionId)
+        self.blockingManager = CallDirectoryManagerService(
+            extensionBundleIdentifier: TrashcallExtensionID.blocking
+        )
+    }
+
+    /// Reloads every extension the user has enabled in system settings.
+    /// Returns the error of each failed reload (empty = all succeeded).
+    private func reloadEnabledExtensions() async -> [Error] {
+        var errors: [Error] = []
+        for service in [manager, blockingManager] {
+            guard await service.checkStatus() == .enabled else { continue }
+            do {
+                try await service.reloadExtension()
+            } catch {
+                errors.append(error)
+            }
+        }
+        return errors
     }
 
     public var body: some View {
@@ -104,9 +125,9 @@ public struct TrashcallDashboardView: View {
                                 .font(.system(size: 44))
                                 .foregroundColor(statusColor)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(extensionStatus == .enabled ? "系统全能防护中" : "未开启系统授权")
+                                Text(protectionTitle)
                                     .font(.headline.weight(.bold))
-                                Text(extensionStatus == .enabled ? "已成功接入 iOS CallKit 系统底层" : "请在系统设置中启用 Trashcall")
+                                Text(protectionSubtitle)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -164,11 +185,11 @@ public struct TrashcallDashboardView: View {
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                        if extensionStatus != .enabled {
+                        if extensionStatus != .enabled || blockingStatus != .enabled {
                             Button {
                                 Task { await manager.openCallDirectorySettings() }
                             } label: {
-                                Label("前往开启「通话阻止与身份识别」", systemImage: "gearshape.fill")
+                                Label("前往开启「通话阻止与身份识别」中的两个开关", systemImage: "gearshape.fill")
                                     .font(.footnote.weight(.semibold))
                                     .frame(maxWidth: .infinity)
                             }
@@ -184,8 +205,11 @@ public struct TrashcallDashboardView: View {
                     ForEach(ProtectionStrategy.allCases) { strategy in
                         let isBlocked = strategyStates[strategy] ?? false
                         Toggle(isOn: Binding(
-                            get: { isBlocked },
+                            get: { strategyStates[strategy] ?? false },
                             set: { newVal in
+                                guard !isSyncing else { return }
+                                // 乐观更新，避免开关回弹；写库失败时 refreshStatus 会纠正
+                                strategyStates[strategy] = newVal
                                 Task { await toggleStrategy(strategy, enabled: newVal) }
                             }
                         )) {
@@ -213,6 +237,7 @@ public struct TrashcallDashboardView: View {
                                 }
                             }
                         }
+                        .disabled(isSyncing)
                     }
                 } header: {
                     HStack {
@@ -229,6 +254,7 @@ public struct TrashcallDashboardView: View {
                             Text("批量切换")
                                 .font(.caption2)
                         }
+                        .disabled(isSyncing)
                     }
                 } footer: {
                     Text("开启后将从打标库直接划入自动挂断黑名单，享受零响铃静默阻断；关闭后保留来电识别打标。")
@@ -364,7 +390,7 @@ public struct TrashcallDashboardView: View {
                 } header: {
                     Text("精准添加自定义规则")
                 } footer: {
-                    Text(selectedAction == .block ? "自动挂断：命中该规则时，iPhone 静默阻断来电不响铃，并在通话记录标明由 Trashcall 阻止。" : "来电识别：完整手机号精确标记，短号段自动补最多 4 位（例如 9521 → 9521****）。")
+                    Text(selectedAction == .block ? "自动挂断：命中该规则时，iPhone 静默阻断来电不响铃，并在通话记录标明由 Trashcall 阻止。系统会同时写入号码原形式与 86 前缀形式（中国来电常不带 86）。" : "来电识别：完整手机号精确标记；短号段自动补齐到标准位长（如 9521 → 9521****、192804 → 192804*****）。")
                         .font(.caption2)
                 }
 
@@ -419,7 +445,7 @@ public struct TrashcallDashboardView: View {
 
                             if let run = lastExtensionRun {
                                 Divider()
-                                Text("扩展上次同步统计：")
+                                Text("识别扩展上次同步统计：")
                                     .font(.caption.weight(.semibold))
                                 Text("• 注入自动挂断: \(run.blockingFed) 条")
                                     .font(.caption2).foregroundColor(.secondary)
@@ -431,6 +457,25 @@ public struct TrashcallDashboardView: View {
                                     Text("• 扩展错误: \(err)")
                                         .font(.caption2).foregroundColor(.red)
                                 }
+                            }
+
+                            if let run = lastBlockRun {
+                                Divider()
+                                Text("挂断扩展上次同步统计：")
+                                    .font(.caption.weight(.semibold))
+                                Text("• 注入自动挂断: \(run.blockingFed) 条")
+                                    .font(.caption2).foregroundColor(.secondary)
+                                Text("• 同步时间: \(runTimeText(run.at))")
+                                    .font(.caption2).foregroundColor(.secondary)
+                                if let err = run.error, !err.isEmpty {
+                                    Text("• 扩展错误: \(err)")
+                                        .font(.caption2).foregroundColor(.red)
+                                }
+                            } else if blockingStatus == .enabled {
+                                Divider()
+                                Text("挂断扩展尚未完成过一次同步：请先在系统设置开启「Trashcall 挂断」，再点「重新同步全量数据库」。")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
                             }
 
                             Divider()
@@ -496,18 +541,19 @@ public struct TrashcallDashboardView: View {
                 }.value
                 await refreshStatus()
                 checkClipboard()
-                if extensionStatus == .enabled {
-                    do {
-                        try await Task.sleep(for: .milliseconds(300))
-                        try await manager.reloadExtension()
-                        await refreshStatus()
-                    } catch {
-                        if manager.isCurrentlyLoading(error) {
-                            await refreshStatus()
-                        } else {
-                            let nsErr = error as NSError
-                            errorMessage = "启动时系统重载失败 [错误码 \(nsErr.code)]：\(error.localizedDescription)"
-                        }
+                // 启动时同步：识别与挂断两个扩展都重载（各自仅在已启用时执行）
+                do {
+                    try await Task.sleep(for: .milliseconds(300))
+                    let startupErrors = await reloadEnabledExtensions()
+                    await refreshStatus()
+                    if let first = startupErrors.first(where: { !manager.isCurrentlyLoading($0) }) {
+                        let nsErr = first as NSError
+                        errorMessage = "启动时系统重载失败 [错误码 \(nsErr.code)]：\(first.localizedDescription)"
+                    }
+                } catch {
+                    if !(error is CancellationError) {
+                        let nsErr = error as NSError
+                        errorMessage = "启动时系统重载失败 [错误码 \(nsErr.code)]：\(error.localizedDescription)"
                     }
                 }
                 isSyncing = false
@@ -543,19 +589,40 @@ public struct TrashcallDashboardView: View {
         Date(timeIntervalSince1970: timestamp).formatted(date: .abbreviated, time: .shortened)
     }
 
+    // MARK: - 状态文案
+
+    /// 挂断要真正生效，识别与挂断两个扩展开关都必须开启。
+    private var bothExtensionsEnabled: Bool {
+        extensionStatus == .enabled && blockingStatus == .enabled
+    }
+
+    private var protectionTitle: String {
+        if bothExtensionsEnabled { return "系统全能防护中" }
+        if extensionStatus == .enabled { return "挂断扩展未开启" }
+        return "未开启系统授权"
+    }
+
+    private var protectionSubtitle: String {
+        if bothExtensionsEnabled { return "「识别」与「挂断」扩展均已接入 iOS CallKit" }
+        if extensionStatus == .enabled {
+            return "请在系统设置中再开启「Trashcall 挂断」开关，自动挂断才会生效"
+        }
+        return "请在系统设置中开启 Trashcall 的识别与挂断两个扩展开关"
+    }
+
     private var statusIcon: String {
-        switch extensionStatus {
-        case .enabled: return "checkmark.shield.fill"
-        case .disabled: return "exclamationmark.shield.fill"
-        case .unknown: return "questionmark.shield"
+        switch (extensionStatus, blockingStatus) {
+        case (.enabled, .enabled): return "checkmark.shield.fill"
+        case (.enabled, _), (_, .enabled): return "exclamationmark.shield.fill"
+        default: return "questionmark.shield"
         }
     }
 
     private var statusColor: Color {
-        switch extensionStatus {
-        case .enabled: return .green
-        case .disabled: return .orange
-        case .unknown: return .gray
+        switch (extensionStatus, blockingStatus) {
+        case (.enabled, .enabled): return .green
+        case (.enabled, _), (_, .enabled): return .orange
+        default: return .gray
         }
     }
 
@@ -572,10 +639,12 @@ public struct TrashcallDashboardView: View {
 
     private func refreshStatus() async {
         extensionStatus = await manager.checkStatus()
+        blockingStatus = await blockingManager.checkStatus()
         appGroupReady = DatabaseBootstrap.isUsingAppGroup
         lastExtensionRun = ExtensionRunReport.load(fileName: ExtensionRunReport.defaultFileName)
             ?? ExtensionRunReport.load(fileName: ExtensionRunReport.identifyFileName)
             ?? ExtensionRunReport.load()
+        lastBlockRun = ExtensionRunReport.load(fileName: ExtensionRunReport.blockFileName)
 
         if let store = getStore(readOnly: true) {
             blockingCount = store.countBlocking()
@@ -617,13 +686,12 @@ public struct TrashcallDashboardView: View {
         await Task.detached(priority: .userInitiated) {
             DatabaseBootstrap.run()
         }.value
-        do {
-            try await manager.reloadExtension()
-            await refreshStatus()
-            successNotice = "数据库已同步，CallKit 扩展已成功重载。"
-        } catch {
-            errorMessage = "重载扩展失败: \(error.localizedDescription)"
-            await refreshStatus()
+        let errors = await reloadEnabledExtensions()
+        await refreshStatus()
+        if errors.isEmpty {
+            successNotice = "数据库已同步，识别与挂断扩展均已成功重载。"
+        } else {
+            errorMessage = "重载扩展失败: \(errors.map(\.localizedDescription).joined(separator: "；"))"
         }
     }
 
@@ -656,15 +724,16 @@ public struct TrashcallDashboardView: View {
                 activeRules.insert(newRule, at: 0)
             }
             customRulePattern = ""
-            try await manager.reloadExtension()
-            await refreshStatus()
             let actionText = selectedAction == .block ? "自动挂断黑名单" : "来电识别"
+            let notice: String
             if phoneNumbers.count <= 4 {
                 let preview = phoneNumbers.map { "+\($0)" }.joined(separator: " / ")
-                successNotice = "已将 \(preview) 写入\(actionText)。"
+                notice = "已将 \(preview) 写入\(actionText)。"
             } else {
-                successNotice = "已将号段 \(resolved)（\(phoneNumbers.count) 个号码）写入\(actionText)。"
+                notice = "已将号段 \(resolved)（\(phoneNumbers.count) 个号码）写入\(actionText)。"
             }
+            // 规则已落库；系统重载失败不应报成“添加失败”
+            await finishChangeAfterStoreWrite(successMessage: notice)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -698,15 +767,8 @@ public struct TrashcallDashboardView: View {
                     return
                 }
             }
-            do {
-                try await manager.reloadExtension()
-            } catch {
-                if !manager.isCurrentlyLoading(error) {
-                    errorMessage = "已从本地删除，但系统重载失败：\(error.localizedDescription)"
-                }
-            }
-            await refreshStatus()
-            successNotice = "规则已删除。"
+            // 规则已从本地删除；重载失败只提示，不推翻删除结果
+            await finishChangeAfterStoreWrite(successMessage: "规则已删除。")
         }
     }
 
@@ -717,6 +779,7 @@ public struct TrashcallDashboardView: View {
         defer { isSyncing = false }
         guard let store = getStore(readOnly: false) else {
             errorMessage = "无法连接离线数据库"
+            await refreshStatus()
             return
         }
         do {
@@ -724,12 +787,38 @@ public struct TrashcallDashboardView: View {
             for strategy in ProtectionStrategy.allCases {
                 strategyStates[strategy] = enabled
             }
-            try await manager.reloadExtension()
-            await refreshStatus()
-            successNotice = enabled ? "所有高危号段已切换为「自动挂断」。" : "所有高危号段已恢复为「来电打标」。"
         } catch {
             errorMessage = "批量策略设置失败: \(error.localizedDescription)"
             await refreshStatus()
+            return
+        }
+        await finishChangeAfterStoreWrite(
+            successMessage: enabled ? "所有高危号段已切换为「自动挂断」。" : "所有高危号段已恢复为「来电打标」。"
+        )
+    }
+
+    /// 写库成功后的统一收尾。
+    /// 数据一旦落库即已保存成功；系统重载（reloadExtension）只是把新数据
+    /// 同步进 iOS 底层索引，重载失败不应被报成「策略设置失败」。
+    /// - 同时重载识别与挂断两个已启用的扩展（策略/规则会同时改动两张表）。
+    /// - 系统繁忙（正在加载另一批数据）时，重试由 reloadExtension 内部完成；
+    ///   若最终仍未完成，提示用户稍后手动同步，而不是报错。
+    private func finishChangeAfterStoreWrite(successMessage: String) async {
+        let identificationOn = await manager.checkStatus() == .enabled
+        let blockingOn = await blockingManager.checkStatus() == .enabled
+        guard identificationOn || blockingOn else {
+            await refreshStatus()
+            successNotice = successMessage + "（提示：扩展开关尚未在系统设置中开启，开启后将自动生效。）"
+            return
+        }
+        let errors = await reloadEnabledExtensions()
+        await refreshStatus()
+        if errors.isEmpty {
+            successNotice = successMessage
+        } else if errors.allSatisfy({ manager.isCurrentlyLoading($0) }) {
+            successNotice = successMessage + "（系统正在后台加载，稍后可在高级设置中点「重新同步全量数据库」确保立即生效。）"
+        } else {
+            errorMessage = "设置已保存，但部分系统重载失败：\(errors.map(\.localizedDescription).joined(separator: "；"))"
         }
     }
 
@@ -777,18 +866,20 @@ public struct TrashcallDashboardView: View {
         defer { isSyncing = false }
         guard let store = getStore(readOnly: false) else {
             errorMessage = "无法连接离线数据库"
+            await refreshStatus()
             return
         }
         do {
             try store.setStrategy(strategy, enabled: enabled)
             strategyStates[strategy] = enabled
-            try await manager.reloadExtension()
-            await refreshStatus()
-            successNotice = "\(strategy.title) 已\(enabled ? "开启自动挂断" : "恢复为来电识别")。"
         } catch {
             errorMessage = "策略设置失败: \(error.localizedDescription)"
             await refreshStatus()
+            return
         }
+        await finishChangeAfterStoreWrite(
+            successMessage: "\(strategy.title) 已\(enabled ? "开启自动挂断" : "恢复为来电识别")。"
+        )
     }
 
     // MARK: - 号码沙盒诊断

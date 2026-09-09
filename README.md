@@ -53,15 +53,21 @@ Trashcall/
 
 ## 🛠️ 如何在 Xcode 中接入与配置
 
-### 步骤 1：创建 Call Directory Extension Target
+### 步骤 1：创建两个 Call Directory Extension Target
 1. 打开 Xcode，在项目中选择 `File` -> `New` -> `Target...`。
-2. 选择 **Call Directory Extension**，命名为 `CallDirectoryExtension`。
+2. 选择 **Call Directory Extension**，分别创建两个扩展：
+   - `CallDirectoryExtension`（识别扩展，`feedKind = .identificationOnly`，只提交来电打标条目）。
+   - `BlockDirectoryExtension`（挂断扩展，`feedKind = .blockingOnly`，只提交自动挂断条目）。
 3. 将项目依赖指向本 `Trashcall` Swift Package。
+
+> ⚠️ **为什么必须拆成两个扩展**：iOS 26/27 会丢弃同一请求中与打标条目混提的 `addBlockingEntry`，
+> 表现为"加入自动挂断的号码来电仍然正常打入，而打标一切正常"。两个扩展各自提交同质请求即可规避，
+> 且挂断索引体积小、重载快，不受 41 万条打标库影响。
 
 ### 步骤 2：配置 App Groups 共享容器
 由于主 App 与 Extension 位于不同沙盒中，必须开启 App Group 实现数据共享：
 1. 在主 App Target 的 `Signing & Capabilities` 中添加 **App Groups**，例如 `group.com.yourcompany.trashcall`。
-2. 在 `CallDirectoryExtension` Target 的 `Signing & Capabilities` 中添加完全相同的 App Group 标识符。
+2. 在 `CallDirectoryExtension` 与 `BlockDirectoryExtension` 两个 Target 的 `Signing & Capabilities` 中添加完全相同的 App Group 标识符。
 
 ### 步骤 3：实现 CallDirectoryHandler
 在 Extension Target 中，直接继承 `TrashcallCallDirectoryProvider`：
@@ -102,9 +108,11 @@ try store.replaceAll(
     version: "2026.09.09"
 )
 
-// 通知 CallKit 在后台唤醒扩展并完成注册
+// 通知 CallKit 在后台唤醒扩展并完成注册（识别与挂断两个扩展都需要重载）
 let manager = CallDirectoryManagerService(extensionBundleIdentifier: "com.yourcompany.trashcall.CallDirectoryExtension")
 try await manager.reloadExtension()
+let blockManager = CallDirectoryManagerService(extensionBundleIdentifier: "com.yourcompany.trashcall.BlockDirectoryExtension")
+try await blockManager.reloadExtension()
 ```
 
 ---

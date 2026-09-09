@@ -50,6 +50,14 @@ public final class CallDirectoryStore: @unchecked Sendable {
             throw StoreError.cannotOpenDatabase(errorMsg)
         }
 
+        // The main app and the CallKit extension share this database across process
+        // boundaries. Without a busy handler, BEGIN EXCLUSIVE fails immediately with
+        // SQLITE_BUSY under contention (e.g. toggling a strategy while the extension
+        // streams the catalogue). Wait up to 3s instead of failing instantly.
+        if let database = db {
+            sqlite3_busy_timeout(database, 3000)
+        }
+
         // Enable Write-Ahead Logging (WAL) for better concurrency between Main App and Extension
         if !readOnly {
             try execute(sql: "PRAGMA journal_mode = WAL;")
@@ -521,9 +529,11 @@ public final class CallDirectoryStore: @unchecked Sendable {
     }
 
     public func convertBlockingToIdentification(defaultLabel: String = "骚扰电话") throws {
+        // Escape single quotes so a label containing ' cannot break the SQL statement.
+        let safeLabel = defaultLabel.replacingOccurrences(of: "'", with: "''")
         try execute(sql: """
         INSERT OR IGNORE INTO identification_numbers (phone_number, label)
-        SELECT phone_number, '\(defaultLabel)' FROM blocking_numbers;
+        SELECT phone_number, '\(safeLabel)' FROM blocking_numbers;
         DELETE FROM blocking_numbers;
         DELETE FROM user_blocking_numbers;
         """)
