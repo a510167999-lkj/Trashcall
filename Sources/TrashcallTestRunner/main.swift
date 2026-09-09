@@ -269,6 +269,214 @@ func runSuite() async {
         assert(mock.addedIdentification.map(\.phoneNumber) == [8613800138000])
     }
 
+    test("User can add blocking rule and stream via .full feed mode with strict ordering") {
+        let tempDir = FileManager.default.temporaryDirectory
+        let dbFile = tempDir.appendingPathComponent("test_feed_full_\(UUID().uuidString).sqlite")
+        defer {
+            try? FileManager.default.removeItem(at: dbFile)
+            try? FileManager.default.removeItem(atPath: dbFile.path + "-wal")
+            try? FileManager.default.removeItem(atPath: dbFile.path + "-shm")
+        }
+        let store = CallDirectoryStore(databaseURL: dbFile)
+        try store.open()
+        try store.initializeSchema()
+
+        // 1. Add an identification entry
+        try store.insertIdentificationBatch([
+            IdentificationEntry(phoneNumber: 8695210000, label: "推销")
+        ])
+
+        // 2. Add a user block rule
+        let blockForms = PhoneNumber.callKitEntries("18964046784").map(\.rawValue)
+        let blockRule = ActiveRuleItem(
+            pattern: "18964046784",
+            action: .block,
+            count: blockForms.count
+        )
+        try store.addUserRule(blockRule, numbers: blockForms)
+
+        assert(store.countBlocking() == 2)
+        assert(store.containsBlocking(18964046784))
+        assert(store.containsBlocking(8618964046784))
+        assert(!store.containsIdentification(18964046784), "Must be mutually exclusive")
+
+        // 3. Feed in .full mode
+        let mock = MockCallDirectoryContext()
+        try CallDirectoryFeeder().feed(kind: .full, from: store, into: mock)
+
+        assert(mock.isCompleted)
+        assert(mock.addedBlocking.count == 2)
+        assert(mock.addedIdentification.count == 1)
+        assert(SortedSequenceValidator.isStrictlyAscending(mock.addedBlocking))
+        assert(SortedSequenceValidator.isStrictlyAscending(mock.addedIdentification.map(\.phoneNumber)))
+
+        // 4. Switch from block to identify
+        let identifyRule = ActiveRuleItem(
+            pattern: "18964046784",
+            action: .identify,
+            label: "重新标记为好友",
+            count: blockForms.count
+        )
+        try store.addUserRule(identifyRule, numbers: blockForms)
+        assert(store.countBlocking() == 0, "Blocking should be cleared after switching to identify")
+        assert(store.containsIdentification(18964046784))
+    }
+
+    // 11. Protection Strategy Toggling Tests
+    test("Protection Strategy Toggling moves numbers between identification and blocking") {
+        let tempDir = FileManager.default.temporaryDirectory
+        let dbFile = tempDir.appendingPathComponent("test_strategy_\(UUID().uuidString).sqlite")
+        defer {
+            try? FileManager.default.removeItem(at: dbFile)
+            try? FileManager.default.removeItem(atPath: dbFile.path + "-wal")
+            try? FileManager.default.removeItem(atPath: dbFile.path + "-shm")
+        }
+        let store = CallDirectoryStore(databaseURL: dbFile)
+        try store.open()
+        try store.initializeSchema()
+
+        // Insert numbers representing 95, 400, MVNO, Landline, and Overseas into identification
+        let entries: [IdentificationEntry] = [
+            IdentificationEntry(phoneNumber: 8695201234, label: "95呼叫中心"),
+            IdentificationEntry(phoneNumber: 864001234567, label: "400推销"),
+            IdentificationEntry(phoneNumber: 8617012345678, label: "170虚商"),
+            IdentificationEntry(phoneNumber: 862131001234, label: "上海中介座机"),
+            IdentificationEntry(phoneNumber: 85221001234, label: "香港高危外呼")
+        ]
+        try store.insertIdentificationBatch(entries)
+        assert(store.countIdentification() == 5)
+        assert(store.countBlocking() == 0)
+
+        // Verify initial strategy state is false
+        assert(store.isStrategyEnabled(.block95) == false)
+        assert(store.isStrategyEnabled(.block400) == false)
+        assert(store.isStrategyEnabled(.blockMVNO) == false)
+        assert(store.isStrategyEnabled(.blockLandlines) == false)
+        assert(store.isStrategyEnabled(.blockOverseas) == false)
+
+        // Enable 95 strategy
+        try store.setStrategy(.block95, enabled: true)
+        assert(store.isStrategyEnabled(.block95) == true)
+        assert(store.countBlocking() == 1)
+        assert(store.containsBlocking(8695201234))
+        assert(!store.containsIdentification(8695201234))
+
+        // Enable Overseas strategy
+        try store.setStrategy(.blockOverseas, enabled: true)
+        assert(store.isStrategyEnabled(.blockOverseas) == true)
+        assert(store.countBlocking() == 2)
+        assert(store.containsBlocking(85221001234))
+        assert(!store.containsIdentification(85221001234))
+
+        // Enable Landline strategy
+        try store.setStrategy(.blockLandlines, enabled: true)
+        assert(store.isStrategyEnabled(.blockLandlines) == true)
+        assert(store.countBlocking() == 3)
+        assert(store.containsBlocking(862131001234))
+
+        // Disable 95 strategy -> restored to identification
+        try store.setStrategy(.block95, enabled: false)
+        assert(store.isStrategyEnabled(.block95) == false)
+        assert(store.countBlocking() == 2)
+        assert(!store.containsBlocking(8695201234))
+        assert(store.containsIdentification(8695201234))
+    }
+
+    // 12. Sandbox Diagnosis Tests
+    test("Sandbox Diagnosis accurately predicts CallKit behavior") {
+        let tempDir = FileManager.default.temporaryDirectory
+        let dbFile = tempDir.appendingPathComponent("test_diag_\(UUID().uuidString).sqlite")
+        defer {
+            try? FileManager.default.removeItem(at: dbFile)
+            try? FileManager.default.removeItem(atPath: dbFile.path + "-wal")
+            try? FileManager.default.removeItem(atPath: dbFile.path + "-shm")
+        }
+        let store = CallDirectoryStore(databaseURL: dbFile)
+        try store.open()
+        try store.initializeSchema()
+
+        // 1. Add identification
+        try store.insertIdentificationBatch([
+            IdentificationEntry(phoneNumber: 8695211000, label: "推销电话")
+        ])
+
+        // 2. Add user block rule
+        let forms = PhoneNumber.callKitEntries("18964046784").map(\.rawValue)
+        let blockRule = ActiveRuleItem(pattern: "18964046784", action: .block, count: forms.count)
+        try store.addUserRule(blockRule, numbers: forms)
+
+        // Diagnosis 1: Blocked number
+        let diag1 = store.diagnose(input: "18964046784")
+        if case .blocked = diag1 {
+            // expected
+        } else {
+            assertionFailure("Expected blocked, got \(diag1)")
+        }
+
+        // Diagnosis 2: Identified number (with and without 86)
+        let diag2 = store.diagnose(input: "95211000")
+        if case .identified(let label) = diag2 {
+            assert(label == "推销电话")
+        } else {
+            assertionFailure("Expected identified, got \(diag2)")
+        }
+
+        // Diagnosis 3: Not found number
+        let diag3 = store.diagnose(input: "13912345678")
+        if case .notFound = diag3 {
+            // expected
+        } else {
+            assertionFailure("Expected notFound, got \(diag3)")
+        }
+
+        // Diagnosis 4: Invalid input
+        let diag4 = store.diagnose(input: "abcdef")
+        if case .invalid = diag4 {
+            // expected
+        } else {
+            assertionFailure("Expected invalid, got \(diag4)")
+        }
+    }
+
+    // 13. Batch All Strategies Toggle
+    test("Batch All Strategies Toggle switches all categories in one transaction") {
+        let tempDir = FileManager.default.temporaryDirectory
+        let dbFile = tempDir.appendingPathComponent("test_all_strat_\(UUID().uuidString).sqlite")
+        defer {
+            try? FileManager.default.removeItem(at: dbFile)
+            try? FileManager.default.removeItem(atPath: dbFile.path + "-wal")
+            try? FileManager.default.removeItem(atPath: dbFile.path + "-shm")
+        }
+        let store = CallDirectoryStore(databaseURL: dbFile)
+        try store.open()
+        try store.initializeSchema()
+
+        let entries: [IdentificationEntry] = [
+            IdentificationEntry(phoneNumber: 8695201234, label: "95"),
+            IdentificationEntry(phoneNumber: 864001234567, label: "400"),
+            IdentificationEntry(phoneNumber: 8617012345678, label: "170"),
+            IdentificationEntry(phoneNumber: 862131001234, label: "座机"),
+            IdentificationEntry(phoneNumber: 85221001234, label: "境外")
+        ]
+        try store.insertIdentificationBatch(entries)
+
+        // Turn all on
+        try store.setAllStrategies(enabled: true)
+        for s in ProtectionStrategy.allCases {
+            assert(store.isStrategyEnabled(s) == true)
+        }
+        assert(store.countBlocking() == 5)
+        assert(store.countIdentification() == 0)
+
+        // Turn all off
+        try store.setAllStrategies(enabled: false)
+        for s in ProtectionStrategy.allCases {
+            assert(store.isStrategyEnabled(s) == false)
+        }
+        assert(store.countBlocking() == 0)
+        assert(store.countIdentification() == 5)
+    }
+
     print("==================================================")
     print("📊 Test Results: \(passed) passed, \(failed) failed")
     print("==================================================")

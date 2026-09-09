@@ -18,10 +18,10 @@ final class CallDirectoryHandler: TrashcallCallDirectoryProvider {
     }
 
     override var feedKind: CallDirectoryFeedKind {
-        return .identificationOnly
+        return .full
     }
 
     override var runReportFileName: String {
-        return ExtensionRunReport.identifyFileName
+        return ExtensionRunReport.defaultFileName
     }
 }

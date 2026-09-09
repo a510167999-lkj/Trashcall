@@ -18,7 +18,7 @@ open class TrashcallCallDirectoryProvider: CXCallDirectoryProvider {
     }
 
     open var feedKind: CallDirectoryFeedKind {
-        return .identificationOnly
+        return .full
     }
 
     open var runReportFileName: String {
@@ -58,8 +58,17 @@ open class TrashcallCallDirectoryProvider: CXCallDirectoryProvider {
             // Read-write so the extension can see WAL; do not create an empty DB here.
             try store.open(readOnly: false, createIfNeeded: false)
             try store.initializeSchema()
-            report.blockingFed = 0
-            report.identificationFed = store.countIdentification()
+            switch feedKind {
+            case .identificationOnly:
+                report.blockingFed = 0
+                report.identificationFed = store.countIdentification()
+            case .userBlockingOnly:
+                report.blockingFed = store.countUserBlocking()
+                report.identificationFed = 0
+            case .full:
+                report.blockingFed = store.countBlocking()
+                report.identificationFed = store.countIdentification()
+            }
 
             let feeder = CallDirectoryFeeder()
             let contextAdapter = CXCallDirectoryContextAdapter(context: context)

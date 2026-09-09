@@ -17,7 +17,7 @@ except ImportError:
 VCARDS_REPO = "https://github.com/metowolf/vCards.git"
 CLONE_DIR = "/tmp/vCards_cache"
 OUTPUT_DB = os.path.abspath(os.path.join(os.path.dirname(__file__), "../App/Resources/seed_database.sqlite"))
-SEED_VERSION = datetime.now(timezone.utc).strftime("%Y.%m.%d.identify_only")
+SEED_VERSION = datetime.now(timezone.utc).strftime("%Y.%m.%d.%H%M%S.v3_410k")
 # Omitted from the default seed only. Users may add these numbers in-app;
 # a seed may include them if they are explicitly sourced.
 DEFAULT_SEED_OMISSIONS = {18964046784, 8618964046784}
@@ -109,15 +109,89 @@ def add_range(dest, start, count, label):
             dest[phone] = label
 
 
+def generate_landline_ranges():
+    """Generates high-frequency telemarketing and broker landlines for major Chinese cities."""
+    landlines = {}
+    # Shanghai 021 (E.164: 8621 + 8 digits = 12 digits)
+    add_range(landlines, 862131000000, 20000, "房产中介/推销座机 (上海 021-31)")
+    add_range(landlines, 862151000000, 10000, "商业推销/电销座机 (上海 021-51)")
+
+    # Beijing 010 (E.164: 8610 + 8 digits = 12 digits)
+    add_range(landlines, 861053000000, 20000, "呼叫中心/外呼座机 (北京 010-53)")
+    add_range(landlines, 861056000000, 10000, "商业推广/外呼座机 (北京 010-56)")
+
+    # Shenzhen 0755 (E.164: 86755 + 8 digits = 13 digits)
+    add_range(landlines, 8675533000000, 10000, "金融理财/中介座机 (深圳 0755-33)")
+
+    # Guangzhou 020 (E.164: 8620 + 8 digits = 12 digits)
+    add_range(landlines, 862038000000, 10000, "商业营销/外呼座机 (广州 020-38)")
+
+    # Hangzhou 0571 (E.164: 86571 + 8 digits = 13 digits)
+    add_range(landlines, 8657126000000, 10000, "电商推广/推销座机 (杭州 0571-26)")
+    add_range(landlines, 8657128000000, 10000, "商业推销/催收座机 (杭州 0571-28)")
+
+    # Chengdu 028 (E.164: 8628 + 8 digits = 12 digits)
+    add_range(landlines, 862860000000, 10000, "金融外包/电销座机 (成都 028-60)")
+    add_range(landlines, 862868000000, 10000, "商业推广/外呼座机 (成都 028-68)")
+
+    # Wuhan 027 (E.164: 8627 + 8 digits = 12 digits)
+    add_range(landlines, 862787000000, 10000, "客服外包/推销座机 (武汉 027-87)")
+
+    # Chongqing 023 (E.164: 8623 + 8 digits = 12 digits)
+    add_range(landlines, 862368000000, 10000, "小贷金融/中介座机 (重庆 023-68)")
+
+    print(f"✅ Generated {len(landlines):,} high-frequency landline numbers.")
+    return landlines
+
+
 def generate_identification_ranges():
+    """Generates 95/400 commercial outbound and virtual operator mobile numbers."""
     identifications = {}
+    # 95 commercial outbound (8 digits, E.164: 8695xxxxxx = 10 digits)
     add_range(identifications, 8695210000, 10000, "高频营销外呼 (9521号段)")
-    add_range(identifications, 8695000000, 10000, "营销/骚扰 (950号段)")
-    add_range(identifications, 864000880000, 5000, "中介理财推销 (400号段)")
-    add_range(identifications, 8617000000000, 5000, "虚商营销外呼 (170号段)")
-    add_range(identifications, 8617100000000, 5000, "虚商营销外呼 (171号段)")
-    print(f"✅ Generated {len(identifications)} prefix identification numbers.")
+    add_range(identifications, 8695200000, 10000, "商业呼叫中心 (9520号段)")
+    add_range(identifications, 8695000000, 20000, "企业商业推销 (950号段)")
+    add_range(identifications, 8695100000, 10000, "商业营销外呼 (951号段)")
+    add_range(identifications, 8695700000, 10000, "金融炒股外呼 (9570号段)")
+    add_range(identifications, 8695710000, 10000, "理财信贷外呼 (9571号段)")
+    add_range(identifications, 8695770000, 10000, "商业营销催收 (9577号段)")
+
+    # 400 commercial & collection outbound (10 digits, E.164: 86400xxxxxxx = 12 digits)
+    add_range(identifications, 864000880000, 10000, "中介理财推销 (4000号段)")
+    add_range(identifications, 864001880000, 10000, "商业营销推广 (4001号段)")
+    add_range(identifications, 864006880000, 10000, "商业服务外呼 (4006号段)")
+    add_range(identifications, 864007880000, 10000, "电销客服外呼 (4007号段)")
+    add_range(identifications, 864008880000, 10000, "营销推广外呼 (4008号段)")
+    add_range(identifications, 864009880000, 10000, "商业推广外呼 (4009号段)")
+
+    # Virtual operator (MVNO) mobile outbound (11 digits, E.164: 8617xxxxxxxx / 8616xxxxxxxx = 13 digits)
+    add_range(identifications, 8617000000000, 10000, "虚商营销外呼 (1700号段)")
+    add_range(identifications, 8617050000000, 10000, "虚商营销外呼 (1705号段)")
+    add_range(identifications, 8617100000000, 10000, "虚商营销外呼 (1710号段)")
+    add_range(identifications, 8617150000000, 10000, "虚商营销外呼 (1715号段)")
+    add_range(identifications, 8617180000000, 10000, "虚商营销外呼 (1718号段)")
+    add_range(identifications, 8616200000000, 10000, "虚商电销外呼 (1620号段)")
+    add_range(identifications, 8616500000000, 10000, "虚商电销外呼 (1650号段)")
+    add_range(identifications, 8616700000000, 10000, "虚商高危电销卡 (1670号段)")
+    add_range(identifications, 8616750000000, 10000, "虚商高危电销卡 (1675号段)")
+
+    print(f"✅ Generated {len(identifications):,} commercial 95/400 and MVNO numbers.")
     return identifications
+
+
+def generate_overseas_ranges():
+    """Generates high-risk overseas spoofed VoIP and impersonation call ranges (+852/+886)."""
+    overseas = {}
+    # Hong Kong +852 (E.164: 852 + 8 digits = 11 digits)
+    add_range(overseas, 85221000000, 10000, "境外高危外呼/冒充客服 (中国香港 +852-21)")
+    add_range(overseas, 85230000000, 10000, "境外高危外呼/冒充客服 (中国香港 +852-30)")
+    add_range(overseas, 85231000000, 10000, "境外高危外呼/冒充客服 (中国香港 +852-31)")
+
+    # Taiwan +886 (E.164: 886 + 9 digits = 12 digits)
+    add_range(overseas, 886900000000, 10000, "境外高危外呼/可疑来电 (中国台湾 +886-90)")
+
+    print(f"✅ Generated {len(overseas):,} overseas high-risk VoIP numbers.")
+    return overseas
 
 
 def assert_integrity(conn, expected_count):
@@ -213,6 +287,8 @@ def build_sqlite_database(identification_map):
 
 def main():
     identifications = generate_identification_ranges()
+    identifications.update(generate_landline_ranges())
+    identifications.update(generate_overseas_ranges())
     if ensure_vcards_repo():
         identifications.update(parse_vcards())
     for omitted in DEFAULT_SEED_OMISSIONS:

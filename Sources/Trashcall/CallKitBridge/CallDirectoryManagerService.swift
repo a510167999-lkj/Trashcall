@@ -63,17 +63,21 @@ public final class CallDirectoryManagerService: Sendable {
     }
 
     /// Triggers CallKit to reload the extension, ingesting new or updated data.
-    public func reloadExtension() async throws {
+    public func reloadExtension(maxRetries: Int = 3) async throws {
         #if canImport(CallKit) && (os(iOS) || targetEnvironment(macCatalyst))
-        do {
-            try await performReload()
-        } catch {
-            if isCurrentlyLoading(error) {
-                try await Task.sleep(for: .milliseconds(800))
+        var attempt = 0
+        while true {
+            do {
                 try await performReload()
                 return
+            } catch {
+                attempt += 1
+                if isCurrentlyLoading(error) && attempt <= maxRetries {
+                    try await Task.sleep(for: .milliseconds(800 * attempt))
+                    continue
+                }
+                throw error
             }
-            throw error
         }
         #endif
     }
@@ -93,10 +97,15 @@ public final class CallDirectoryManagerService: Sendable {
         }
     }
 
-    private func isCurrentlyLoading(_ error: Error) -> Bool {
+    public func isCurrentlyLoading(_ error: Error) -> Bool {
         let nsError = error as NSError
         // CXErrorCodeCallDirectoryManagerError.currentlyLoading == 7
-        return nsError.domain.contains("CallDirectoryManager") && nsError.code == 7
+        // Apple's domain is "com.apple.CallKit.error.calldirectorymanager" (lowercase)
+        return (nsError.domain.lowercased().contains("calldirectory") || nsError.domain.lowercased().contains("callkit")) && nsError.code == 7
+    }
+    #else
+    public func isCurrentlyLoading(_ error: Error) -> Bool {
+        return false
     }
     #endif
 }

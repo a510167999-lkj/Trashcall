@@ -73,11 +73,8 @@ public enum DatabaseBootstrap: Sendable {
         do {
             try store.open()
             try store.initializeSchema()
-            try store.convertBlockingToIdentification()
-            try store.clearAllBlocking()
-            convertLegacyBlockRulesToIdentify(store: store)
             try applyBundledSeedIfNeeded(to: store)
-            try store.clearAllBlocking()
+            reapplyUserRules(store: store)
         } catch {
             print("Failed to initialize database: \(error.localizedDescription)")
         }
@@ -91,45 +88,57 @@ public enum DatabaseBootstrap: Sendable {
 
         let seedVersion = (try? seed.getVersion()) ?? "unknown"
         let liveVersion = (try? store.getVersion()) ?? ""
-        let needsImport = seedVersion != liveVersion || store.countIdentification() == 0
+        let seedCount = (try? seed.getMetadata(key: "identification_count")) ?? ""
+        let liveCount = (try? store.getMetadata(key: "identification_count")) ?? ""
+        let needsImport = seedVersion != liveVersion || seedCount != liveCount || (store.countIdentification() == 0 && store.countBlocking() == 0)
         guard needsImport else { return }
 
-        var entries: [IdentificationEntry] = []
-        try seed.streamIdentificationEntries { entry in
-            entries.append(entry)
+        // Clear existing seed identification entries so new categories are cleanly synced
+        try store.execute(sql: "BEGIN EXCLUSIVE TRANSACTION;")
+        do {
+            try store.execute(sql: "DELETE FROM identification_numbers;")
+            var buffer: [IdentificationEntry] = []
+            buffer.reserveCapacity(5000)
+            try seed.streamIdentificationEntries { entry in
+                buffer.append(entry)
+                if buffer.count >= 5000 {
+                    try store.insertIdentificationBatch(buffer)
+                    buffer.removeAll(keepingCapacity: true)
+                }
+            }
+            if !buffer.isEmpty {
+                try store.insertIdentificationBatch(buffer)
+                buffer.removeAll()
+            }
+            try store.execute(sql: "COMMIT TRANSACTION;")
+            store.checkpoint()
+        } catch {
+            try? store.execute(sql: "ROLLBACK TRANSACTION;")
+            throw error
         }
-        try seed.streamBlockingNumbers { number in
-            entries.append(IdentificationEntry(phoneNumber: number, label: "骚扰电话"))
-        }
-        try store.importIdentifications(entries)
+
         try store.setMetadata(key: "version", value: seedVersion)
-        reapplyUserIdentifyRules(store: store)
-    }
-
-    private static func convertLegacyBlockRulesToIdentify(store: CallDirectoryStore) {
-        guard let rules = try? store.getUserRules() else { return }
-        let expander = RuleExpander()
-        for rule in rules {
-            guard rule.action == .block else { continue }
-            let numbers = (try? expander.expandWildcard(rule.pattern).map(\.rawValue)) ?? []
-            var updated = rule
-            updated.action = .identify
-            updated.label = rule.label ?? "自定义标记"
-            updated.count = numbers.count
-            try? store.addUserRule(updated, numbers: numbers)
+        if !seedCount.isEmpty {
+            try store.setMetadata(key: "identification_count", value: seedCount)
         }
+
+        // Re-apply any enabled strategies
+        for strategy in ProtectionStrategy.allCases {
+            if store.isStrategyEnabled(strategy) {
+                try? store.setStrategy(strategy, enabled: true)
+            }
+        }
+
+        reapplyUserRules(store: store)
     }
 
-    private static func reapplyUserIdentifyRules(store: CallDirectoryStore) {
+    private static func reapplyUserRules(store: CallDirectoryStore) {
         guard let rules = try? store.getUserRules() else { return }
         let expander = RuleExpander()
         for rule in rules {
             let numbers = (try? expander.expandWildcard(rule.pattern).map(\.rawValue)) ?? []
             guard !numbers.isEmpty else { continue }
-            var identify = rule
-            identify.action = .identify
-            identify.label = rule.label ?? "自定义标记"
-            try? store.addUserRule(identify, numbers: numbers)
+            try? store.addUserRule(rule, numbers: numbers)
         }
     }
 

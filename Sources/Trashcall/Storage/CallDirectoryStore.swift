@@ -481,12 +481,14 @@ public final class CallDirectoryStore: @unchecked Sendable {
         }
     }
 
-    public func getVersion() throws -> String? {
+    public func getMetadata(key: String) throws -> String? {
         guard let database = db else { return nil }
         var stmt: OpaquePointer?
-        let sql = "SELECT value FROM metadata WHERE key = 'version' LIMIT 1;"
+        let sql = "SELECT value FROM metadata WHERE key = ? LIMIT 1;"
         guard sqlite3_prepare_v2(database, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
         defer { sqlite3_finalize(stmt) }
+        let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        _ = key.withCString { sqlite3_bind_text(stmt, 1, $0, -1, SQLITE_TRANSIENT) }
 
         if sqlite3_step(stmt) == SQLITE_ROW {
             if let cStr = sqlite3_column_text(stmt, 0) {
@@ -494,6 +496,10 @@ public final class CallDirectoryStore: @unchecked Sendable {
             }
         }
         return nil
+    }
+
+    public func getVersion() throws -> String? {
+        return try getMetadata(key: "version")
     }
 
     public func setMetadata(key: String, value: String) throws {
@@ -647,6 +653,271 @@ public final class CallDirectoryStore: @unchecked Sendable {
         defer { sqlite3_finalize(stmt) }
         while sqlite3_step(stmt) == SQLITE_ROW {
             try handler(sqlite3_column_int64(stmt, 0))
+        }
+    }
+
+    // MARK: - Preset Protection Strategies
+
+    public func isStrategyEnabled(_ strategy: ProtectionStrategy) -> Bool {
+        guard let database = db else { return false }
+        var stmt: OpaquePointer?
+        let sql = "SELECT value FROM metadata WHERE key = ? LIMIT 1;"
+        guard sqlite3_prepare_v2(database, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+        defer { sqlite3_finalize(stmt) }
+        let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        _ = strategy.id.withCString { sqlite3_bind_text(stmt, 1, $0, -1, SQLITE_TRANSIENT) }
+        if sqlite3_step(stmt) == SQLITE_ROW {
+            if let cStr = sqlite3_column_text(stmt, 0) {
+                return String(cString: cStr) == "true"
+            }
+        }
+        return false
+    }
+
+    public func setStrategy(_ strategy: ProtectionStrategy, enabled: Bool) throws {
+        try execute(sql: "BEGIN EXCLUSIVE TRANSACTION;")
+        do {
+            let cond = strategy.conditionSQL
+            if enabled {
+                // Move matching numbers from identification to blocking
+                let moveSql = """
+                INSERT OR IGNORE INTO blocking_numbers (phone_number)
+                SELECT phone_number FROM identification_numbers
+                WHERE \(cond);
+
+                DELETE FROM identification_numbers
+                WHERE \(cond);
+                """
+                try execute(sql: moveSql)
+                let metaSql = "INSERT OR REPLACE INTO metadata (key, value) VALUES ('\(strategy.id)', 'true');"
+                try execute(sql: metaSql)
+            } else {
+                // Move them back from blocking to identification
+                let label = strategy.restoreDefaultLabel
+                let restoreSql = """
+                INSERT OR REPLACE INTO identification_numbers (phone_number, label)
+                SELECT phone_number, '\(label)'
+                FROM blocking_numbers
+                WHERE \(cond);
+
+                DELETE FROM blocking_numbers
+                WHERE \(cond);
+                """
+                try execute(sql: restoreSql)
+                let metaSql = "INSERT OR REPLACE INTO metadata (key, value) VALUES ('\(strategy.id)', 'false');"
+                try execute(sql: metaSql)
+            }
+            try execute(sql: "COMMIT TRANSACTION;")
+            checkpoint()
+        } catch {
+            try? execute(sql: "ROLLBACK TRANSACTION;")
+            throw error
+        }
+    }
+
+    public func setAllStrategies(enabled: Bool) throws {
+        try execute(sql: "BEGIN EXCLUSIVE TRANSACTION;")
+        do {
+            for strategy in ProtectionStrategy.allCases {
+                let cond = strategy.conditionSQL
+                if enabled {
+                    let moveSql = """
+                    INSERT OR IGNORE INTO blocking_numbers (phone_number)
+                    SELECT phone_number FROM identification_numbers
+                    WHERE \(cond);
+
+                    DELETE FROM identification_numbers
+                    WHERE \(cond);
+                    """
+                    try execute(sql: moveSql)
+                    let metaSql = "INSERT OR REPLACE INTO metadata (key, value) VALUES ('\(strategy.id)', 'true');"
+                    try execute(sql: metaSql)
+                } else {
+                    let label = strategy.restoreDefaultLabel
+                    let restoreSql = """
+                    INSERT OR REPLACE INTO identification_numbers (phone_number, label)
+                    SELECT phone_number, '\(label)'
+                    FROM blocking_numbers
+                    WHERE \(cond);
+
+                    DELETE FROM blocking_numbers
+                    WHERE \(cond);
+                    """
+                    try execute(sql: restoreSql)
+                    let metaSql = "INSERT OR REPLACE INTO metadata (key, value) VALUES ('\(strategy.id)', 'false');"
+                    try execute(sql: metaSql)
+                }
+            }
+            try execute(sql: "COMMIT TRANSACTION;")
+            checkpoint()
+        } catch {
+            try? execute(sql: "ROLLBACK TRANSACTION;")
+            throw error
+        }
+    }
+
+    // MARK: - Sandbox Number Diagnosis
+
+    public func diagnose(input: String) -> NumberDiagnosticResult {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return .invalid(reason: "请输入电话号码或号段")
+        }
+        let entries = PhoneNumber.callKitEntries(trimmed)
+        guard !entries.isEmpty else {
+            return .invalid(reason: "无法解析为有效电话号码")
+        }
+
+        // 1. Check direct blocking
+        for entry in entries {
+            if containsBlocking(entry.rawValue) {
+                // Check if matched by user rule
+                if let userRules = try? getUserRules() {
+                    for rule in userRules where rule.action == .block {
+                        let forms = PhoneNumber.callKitEntries(rule.pattern).map(\.rawValue)
+                        if forms.contains(entry.rawValue) || rule.pattern == trimmed {
+                            return .blocked(reason: "命中自定义挂断规则: \(rule.pattern)")
+                        }
+                    }
+                }
+                return .blocked(reason: "命中系统高危自动挂断黑名单")
+            }
+        }
+
+        // 2. Check direct identification
+        guard let database = db else {
+            return .notFound(normalized: entries.first?.description ?? trimmed)
+        }
+        for entry in entries {
+            var stmt: OpaquePointer?
+            let sql = "SELECT label FROM identification_numbers WHERE phone_number = ? LIMIT 1;"
+            if sqlite3_prepare_v2(database, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_int64(stmt, 1, entry.rawValue)
+                if sqlite3_step(stmt) == SQLITE_ROW {
+                    let label: String
+                    if let cStr = sqlite3_column_text(stmt, 0) {
+                        label = String(cString: cStr)
+                    } else {
+                        label = "已收录骚扰电话"
+                    }
+                    sqlite3_finalize(stmt)
+                    return .identified(label: label)
+                }
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        // 3. Check wildcard user rules
+        if let userRules = try? getUserRules() {
+            let expander = RuleExpander()
+            for rule in userRules {
+                if rule.pattern.contains("*") || rule.pattern.contains("?") {
+                    if let expanded = try? expander.expandWildcard(rule.pattern) {
+                        let expandedSet = Set(expanded.map(\.rawValue))
+                        for entry in entries where expandedSet.contains(entry.rawValue) {
+                            if rule.action == .block {
+                                return .blocked(reason: "命中自定义号段挂断: \(rule.pattern)")
+                            } else {
+                                return .identified(label: rule.label ?? "自定义标记号段")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return .notFound(normalized: entries.first?.description ?? trimmed)
+    }
+}
+
+/// Represents the preset protection categories for one-touch blocking toggles.
+public enum ProtectionStrategy: String, CaseIterable, Identifiable, Sendable {
+    case block95 = "block_95"
+    case block400 = "block_400"
+    case blockMVNO = "block_mvno"
+    case blockLandlines = "block_landlines"
+    case blockOverseas = "block_overseas"
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .block95: return "95 商业与金融号段"
+        case .block400: return "400 电销推广号段"
+        case .blockMVNO: return "167/170/171 虚拟运营商"
+        case .blockLandlines: return "全国核心电销中介座机"
+        case .blockOverseas: return "境外高危外呼 (+852/+886)"
+        }
+    }
+
+    public var subtitle: String {
+        switch self {
+        case .block95: return "拦截 952/950/951/957 呼叫中心与金融推销"
+        case .block400: return "拦截 4000 ~ 4009 全系商业推销外呼"
+        case .blockMVNO: return "拦截 167/170/171/165/162 虚商电销卡"
+        case .blockLandlines: return "拦截 北上广深 + 杭蓉汉渝 电销呼叫中心座机"
+        case .blockOverseas: return "拦截 仿冒客服与境外 VoIP 诈骗高危来电"
+        }
+    }
+
+    public var icon: String {
+        switch self {
+        case .block95: return "phone.down.waves.left.and.right"
+        case .block400: return "shield.lefthalf.filled"
+        case .blockMVNO: return "simcard.fill"
+        case .blockLandlines: return "building.2.fill"
+        case .blockOverseas: return "globe.asia.australia.fill"
+        }
+    }
+
+    var conditionSQL: String {
+        switch self {
+        case .block95:
+            return "(phone_number >= 8695000000 AND phone_number <= 8695999999)"
+        case .block400:
+            return "(phone_number >= 864000000000 AND phone_number <= 864009999999)"
+        case .blockMVNO:
+            return "((phone_number >= 8617000000000 AND phone_number <= 8617199999999) OR (phone_number >= 8616200000000 AND phone_number <= 8616799999999))"
+        case .blockLandlines:
+            return "((phone_number >= 862131000000 AND phone_number <= 862131019999) OR (phone_number >= 862151000000 AND phone_number <= 862151009999) OR (phone_number >= 861053000000 AND phone_number <= 861053019999) OR (phone_number >= 861056000000 AND phone_number <= 861056009999) OR (phone_number >= 8675533000000 AND phone_number <= 8675533009999) OR (phone_number >= 862038000000 AND phone_number <= 862038009999) OR (phone_number >= 8657126000000 AND phone_number <= 8657128009999) OR (phone_number >= 862860000000 AND phone_number <= 862868009999) OR (phone_number >= 862787000000 AND phone_number <= 862787009999) OR (phone_number >= 862368000000 AND phone_number <= 862368009999))"
+        case .blockOverseas:
+            return "((phone_number >= 85200000000 AND phone_number <= 85299999999) OR (phone_number >= 886000000000 AND phone_number <= 886999999999))"
+        }
+    }
+
+    var restoreDefaultLabel: String {
+        switch self {
+        case .block95: return "商业金融外呼 (95号段)"
+        case .block400: return "商业推广外呼 (400号段)"
+        case .blockMVNO: return "虚商高危电销卡"
+        case .blockLandlines: return "推销中介座机"
+        case .blockOverseas: return "境外高危外呼/可疑来电"
+        }
+    }
+}
+
+/// The result of diagnosing a phone number in the local CallKit database sandbox.
+public enum NumberDiagnosticResult: Equatable, Sendable {
+    case blocked(reason: String)
+    case identified(label: String)
+    case notFound(normalized: String)
+    case invalid(reason: String)
+
+    public var title: String {
+        switch self {
+        case .blocked: return "🚫 自动挂断拦截"
+        case .identified: return "🏷️ 来电身份识别"
+        case .notFound: return "⚪ 暂未收录号码"
+        case .invalid: return "⚠️ 无效号码"
+        }
+    }
+
+    public var message: String {
+        switch self {
+        case .blocked(let reason): return reason
+        case .identified(let label): return "来电将显示标记: \(label)"
+        case .notFound(let num): return "号码 \(num) 不在本地黑名单或黄页库中。建议配合开启系统「静音未知来电」。"
+        case .invalid(let reason): return reason
         }
     }
 }
