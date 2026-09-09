@@ -1,0 +1,755 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		35E443AAA5461081E7AF0ABB /* CallDirectoryProviderWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89884C7A363FE493AF650311 /* CallDirectoryProviderWrapper.swift */; };
+		3BE49DD1644E78FC828EBDC2 /* TrashcallDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06324AA222A2C2B7F5C377D /* TrashcallDashboardView.swift */; };
+		3DE1A808A429F8C36944741F /* SortedSequenceValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E4B4B51497EED93019B288 /* SortedSequenceValidator.swift */; };
+		454FFC9A0DAC50F25886F540 /* PhoneNumber.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF2313F58F937A31EB42D9E6 /* PhoneNumber.swift */; };
+		4FC4DCC5EA8C2DE9FBF7E612 /* CallDirectoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3562BFE9233266D0D51BF384 /* CallDirectoryStore.swift */; };
+		575D39264FAAAD3F24F40FEF /* CallRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DA76DC244D98BF8EF8EBA6 /* CallRule.swift */; };
+		5CDA9CEBB54ED417EDD0D80D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 336FA11B74095114FAE384B1 /* Assets.xcassets */; };
+		5D6385DB97DCB1F8B6641A13 /* PatternInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BB0A93FE26D0304D228158B /* PatternInput.swift */; };
+		7A1B6632F8A511DE4AA38FE0 /* CallDirectoryHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7F2A6D617BEABA58953AF0 /* CallDirectoryHandler.swift */; };
+		85C684056447B3E09EE50915 /* DeltaPackage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F291A3E20FE1BB646F49EF44 /* DeltaPackage.swift */; };
+		8FD63202BAAA714DF4954C0A /* TrashcallCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 81D630E3FCF957A1336A1724 /* TrashcallCore.framework */; };
+		AD8D18775024152F26B1B2C6 /* IncrementalEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 379B5768E6E132ABB6859B67 /* IncrementalEngine.swift */; };
+		B8596E63292D6D6793017A78 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 336FA11B74095114FAE384B1 /* Assets.xcassets */; };
+		BF322B28662B08A45D2B80CA /* seed_database.sqlite in Resources */ = {isa = PBXBuildFile; fileRef = 9B088F5F33346409A93FE351 /* seed_database.sqlite */; };
+		C37F8499E15794E8599AC33E /* DatabaseBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C4F9B7A2189BBF77844906 /* DatabaseBootstrap.swift */; };
+		C5F02184B0C4AFDAA3226DA8 /* ExtensionRunReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA61680F23A8D442544F6B6 /* ExtensionRunReport.swift */; };
+		CB124DC62F47DBD583AE4834 /* CallDirectoryManagerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE78FFE8B7D9006732F08D81 /* CallDirectoryManagerService.swift */; };
+		D4199620130DDB8269A4DAAF /* TrashcallCallDirectoryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D9033745ABC825D205E0F21 /* TrashcallCallDirectoryProvider.swift */; };
+		D5D60D1A77BD11D8F7857D76 /* TrashcallApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A922BF3AD09DD09D0F3FF88 /* TrashcallApp.swift */; };
+		DD628CB204EB5D2B9BDE1BDE /* TrashcallCallDirectory.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4BFC1C61A614AD9911E65249 /* TrashcallCallDirectory.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E27D69A1C0642ED6EBCF3138 /* Trashcall.swift in Sources */ = {isa = PBXBuildFile; fileRef = 160DE2684ED16A20886B46AD /* Trashcall.swift */; };
+		E73C7ACEEDC151E16C6D9C5A /* TrashcallCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 81D630E3FCF957A1336A1724 /* TrashcallCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		ED2C9DD139F9ECCCFFE9D1E6 /* CallKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 773D01BB134F832F2105B8D2 /* CallKit.framework */; };
+		F9AB3EC87CC222E3380D756C /* TrashcallCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 81D630E3FCF957A1336A1724 /* TrashcallCore.framework */; };
+		FB34E21014756AEDD51B1098 /* RuleExpander.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B179626E3B8DC1F83C1EB22 /* RuleExpander.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		367B38FC3AAE5D56F0299AA6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4F70FBF7CC19E1A4B2B68D0E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0C811A21C5F40C9223C4A61E;
+			remoteInfo = TrashcallCore;
+		};
+		4A2B4653A7977AF88A651C37 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4F70FBF7CC19E1A4B2B68D0E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 90662D505FB3168A2F9C95D9;
+			remoteInfo = TrashcallCallDirectory;
+		};
+		501E374512BC86B6189BE632 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4F70FBF7CC19E1A4B2B68D0E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0C811A21C5F40C9223C4A61E;
+			remoteInfo = TrashcallCore;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B95BB3932EC6EBD3DD891E59 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				E73C7ACEEDC151E16C6D9C5A /* TrashcallCore.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C55F62D6EC3E313C6743C244 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				DD628CB204EB5D2B9BDE1BDE /* TrashcallCallDirectory.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0B1ABCDEBA21657D5E678CFC /* Trashcall.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Trashcall.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		160DE2684ED16A20886B46AD /* Trashcall.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trashcall.swift; sourceTree = "<group>"; };
+		2A922BF3AD09DD09D0F3FF88 /* TrashcallApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashcallApp.swift; sourceTree = "<group>"; };
+		336FA11B74095114FAE384B1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		3562BFE9233266D0D51BF384 /* CallDirectoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryStore.swift; sourceTree = "<group>"; };
+		379B5768E6E132ABB6859B67 /* IncrementalEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncrementalEngine.swift; sourceTree = "<group>"; };
+		3D9033745ABC825D205E0F21 /* TrashcallCallDirectoryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashcallCallDirectoryProvider.swift; sourceTree = "<group>"; };
+		4BFC1C61A614AD9911E65249 /* TrashcallCallDirectory.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TrashcallCallDirectory.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		4C069B908D20595C891FE06C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		773D01BB134F832F2105B8D2 /* CallKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CallKit.framework; path = System/Library/Frameworks/CallKit.framework; sourceTree = SDKROOT; };
+		78E4B4B51497EED93019B288 /* SortedSequenceValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortedSequenceValidator.swift; sourceTree = "<group>"; };
+		7BB0A93FE26D0304D228158B /* PatternInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternInput.swift; sourceTree = "<group>"; };
+		7C7F2A6D617BEABA58953AF0 /* CallDirectoryHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryHandler.swift; sourceTree = "<group>"; };
+		81D630E3FCF957A1336A1724 /* TrashcallCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TrashcallCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		89884C7A363FE493AF650311 /* CallDirectoryProviderWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryProviderWrapper.swift; sourceTree = "<group>"; };
+		8B179626E3B8DC1F83C1EB22 /* RuleExpander.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleExpander.swift; sourceTree = "<group>"; };
+		9B088F5F33346409A93FE351 /* seed_database.sqlite */ = {isa = PBXFileReference; lastKnownFileType = file; path = seed_database.sqlite; sourceTree = "<group>"; };
+		BE78FFE8B7D9006732F08D81 /* CallDirectoryManagerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryManagerService.swift; sourceTree = "<group>"; };
+		D06324AA222A2C2B7F5C377D /* TrashcallDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashcallDashboardView.swift; sourceTree = "<group>"; };
+		D5C4F9B7A2189BBF77844906 /* DatabaseBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseBootstrap.swift; sourceTree = "<group>"; };
+		DF2313F58F937A31EB42D9E6 /* PhoneNumber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneNumber.swift; sourceTree = "<group>"; };
+		E5DA76DC244D98BF8EF8EBA6 /* CallRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRule.swift; sourceTree = "<group>"; };
+		F06EEB3383D060FC14EF98F7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		F291A3E20FE1BB646F49EF44 /* DeltaPackage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeltaPackage.swift; sourceTree = "<group>"; };
+		FBA61680F23A8D442544F6B6 /* ExtensionRunReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionRunReport.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		784498E50FAFEF27B7464F0C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8FD63202BAAA714DF4954C0A /* TrashcallCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F010D9D1808C6968ACDD6E29 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F9AB3EC87CC222E3380D756C /* TrashcallCore.framework in Frameworks */,
+				ED2C9DD139F9ECCCFFE9D1E6 /* CallKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0A335F949C97754E26526F0D /* Trashcall */ = {
+			isa = PBXGroup;
+			children = (
+				160DE2684ED16A20886B46AD /* Trashcall.swift */,
+				8741ABEBFDE9EE750F0AE419 /* CallKitBridge */,
+				60F7C7E39695306D8DDB6EB6 /* Engine */,
+				6BA9A7FCF72DD8D0516EB5F7 /* Models */,
+				64A1B2BFC9D26BF68FC29ABB /* Storage */,
+				224EE2461152C06E71E7DBAB /* UI */,
+			);
+			name = Trashcall;
+			path = Sources/Trashcall;
+			sourceTree = "<group>";
+		};
+		1107683F53D699CA81361A0F /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				336FA11B74095114FAE384B1 /* Assets.xcassets */,
+				4C069B908D20595C891FE06C /* Info.plist */,
+				9B088F5F33346409A93FE351 /* seed_database.sqlite */,
+			);
+			name = Resources;
+			path = App/Resources;
+			sourceTree = "<group>";
+		};
+		224EE2461152C06E71E7DBAB /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				D06324AA222A2C2B7F5C377D /* TrashcallDashboardView.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		4F157FE489B747E8B12C12DB /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				7C7F2A6D617BEABA58953AF0 /* CallDirectoryHandler.swift */,
+			);
+			name = Sources;
+			path = Extensions/CallDirectory/Sources;
+			sourceTree = "<group>";
+		};
+		60F7C7E39695306D8DDB6EB6 /* Engine */ = {
+			isa = PBXGroup;
+			children = (
+				379B5768E6E132ABB6859B67 /* IncrementalEngine.swift */,
+				7BB0A93FE26D0304D228158B /* PatternInput.swift */,
+				8B179626E3B8DC1F83C1EB22 /* RuleExpander.swift */,
+				78E4B4B51497EED93019B288 /* SortedSequenceValidator.swift */,
+			);
+			path = Engine;
+			sourceTree = "<group>";
+		};
+		64A1B2BFC9D26BF68FC29ABB /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				3562BFE9233266D0D51BF384 /* CallDirectoryStore.swift */,
+				D5C4F9B7A2189BBF77844906 /* DatabaseBootstrap.swift */,
+				FBA61680F23A8D442544F6B6 /* ExtensionRunReport.swift */,
+			);
+			path = Storage;
+			sourceTree = "<group>";
+		};
+		6BA9A7FCF72DD8D0516EB5F7 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				E5DA76DC244D98BF8EF8EBA6 /* CallRule.swift */,
+				F291A3E20FE1BB646F49EF44 /* DeltaPackage.swift */,
+				DF2313F58F937A31EB42D9E6 /* PhoneNumber.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		717888A2BE3D153E83B70AD4 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0B1ABCDEBA21657D5E678CFC /* Trashcall.app */,
+				4BFC1C61A614AD9911E65249 /* TrashcallCallDirectory.appex */,
+				81D630E3FCF957A1336A1724 /* TrashcallCore.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		8741ABEBFDE9EE750F0AE419 /* CallKitBridge */ = {
+			isa = PBXGroup;
+			children = (
+				BE78FFE8B7D9006732F08D81 /* CallDirectoryManagerService.swift */,
+				89884C7A363FE493AF650311 /* CallDirectoryProviderWrapper.swift */,
+				3D9033745ABC825D205E0F21 /* TrashcallCallDirectoryProvider.swift */,
+			);
+			path = CallKitBridge;
+			sourceTree = "<group>";
+		};
+		AFF94D1C4202B6040D256F50 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				F06EEB3383D060FC14EF98F7 /* Info.plist */,
+			);
+			name = Resources;
+			path = Extensions/CallDirectory/Resources;
+			sourceTree = "<group>";
+		};
+		C761DF59F9F1BCB5048F0D63 = {
+			isa = PBXGroup;
+			children = (
+				1107683F53D699CA81361A0F /* Resources */,
+				AFF94D1C4202B6040D256F50 /* Resources */,
+				DFC05F1F59E4B329F7201B95 /* Sources */,
+				4F157FE489B747E8B12C12DB /* Sources */,
+				0A335F949C97754E26526F0D /* Trashcall */,
+				F975EBCB4D01969882645FED /* Frameworks */,
+				717888A2BE3D153E83B70AD4 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		DFC05F1F59E4B329F7201B95 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				2A922BF3AD09DD09D0F3FF88 /* TrashcallApp.swift */,
+			);
+			name = Sources;
+			path = App/Sources;
+			sourceTree = "<group>";
+		};
+		F975EBCB4D01969882645FED /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				773D01BB134F832F2105B8D2 /* CallKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0C811A21C5F40C9223C4A61E /* TrashcallCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 41077B4ABABBCF49711CA24A /* Build configuration list for PBXNativeTarget "TrashcallCore" */;
+			buildPhases = (
+				55A8614DC8D98E4FC7FBDB25 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TrashcallCore;
+			packageProductDependencies = (
+			);
+			productName = TrashcallCore;
+			productReference = 81D630E3FCF957A1336A1724 /* TrashcallCore.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		90662D505FB3168A2F9C95D9 /* TrashcallCallDirectory */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9EFD25540508212E12792496 /* Build configuration list for PBXNativeTarget "TrashcallCallDirectory" */;
+			buildPhases = (
+				2F4F09EA2E9011960E550E1F /* Sources */,
+				5AF7F5A162026797F64A2401 /* Resources */,
+				F010D9D1808C6968ACDD6E29 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7A3CBD6894B4958309944308 /* PBXTargetDependency */,
+			);
+			name = TrashcallCallDirectory;
+			packageProductDependencies = (
+			);
+			productName = TrashcallCallDirectory;
+			productReference = 4BFC1C61A614AD9911E65249 /* TrashcallCallDirectory.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		E0D354540581DC8CDE80E881 /* Trashcall */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 29129C78D5DD5DE25158CD37 /* Build configuration list for PBXNativeTarget "Trashcall" */;
+			buildPhases = (
+				D4C234A2B120CB1E6D898D6A /* Sources */,
+				E0C75F60C29EF49DBEEA1F84 /* Resources */,
+				784498E50FAFEF27B7464F0C /* Frameworks */,
+				C55F62D6EC3E313C6743C244 /* Embed Foundation Extensions */,
+				B95BB3932EC6EBD3DD891E59 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F7C4A28AA37B73D5E67574F9 /* PBXTargetDependency */,
+				B821BEB05CDB33485DAE3790 /* PBXTargetDependency */,
+			);
+			name = Trashcall;
+			packageProductDependencies = (
+			);
+			productName = Trashcall;
+			productReference = 0B1ABCDEBA21657D5E678CFC /* Trashcall.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4F70FBF7CC19E1A4B2B68D0E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					0C811A21C5F40C9223C4A61E = {
+						DevelopmentTeam = L39339626G;
+						ProvisioningStyle = Automatic;
+					};
+					90662D505FB3168A2F9C95D9 = {
+						DevelopmentTeam = L39339626G;
+						ProvisioningStyle = Automatic;
+					};
+					E0D354540581DC8CDE80E881 = {
+						DevelopmentTeam = L39339626G;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 6D08AE3C329B87B648747F05 /* Build configuration list for PBXProject "Trashcall" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = C761DF59F9F1BCB5048F0D63;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 717888A2BE3D153E83B70AD4 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E0D354540581DC8CDE80E881 /* Trashcall */,
+				90662D505FB3168A2F9C95D9 /* TrashcallCallDirectory */,
+				0C811A21C5F40C9223C4A61E /* TrashcallCore */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5AF7F5A162026797F64A2401 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B8596E63292D6D6793017A78 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E0C75F60C29EF49DBEEA1F84 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5CDA9CEBB54ED417EDD0D80D /* Assets.xcassets in Resources */,
+				BF322B28662B08A45D2B80CA /* seed_database.sqlite in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2F4F09EA2E9011960E550E1F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A1B6632F8A511DE4AA38FE0 /* CallDirectoryHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		55A8614DC8D98E4FC7FBDB25 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CB124DC62F47DBD583AE4834 /* CallDirectoryManagerService.swift in Sources */,
+				35E443AAA5461081E7AF0ABB /* CallDirectoryProviderWrapper.swift in Sources */,
+				4FC4DCC5EA8C2DE9FBF7E612 /* CallDirectoryStore.swift in Sources */,
+				575D39264FAAAD3F24F40FEF /* CallRule.swift in Sources */,
+				C37F8499E15794E8599AC33E /* DatabaseBootstrap.swift in Sources */,
+				85C684056447B3E09EE50915 /* DeltaPackage.swift in Sources */,
+				C5F02184B0C4AFDAA3226DA8 /* ExtensionRunReport.swift in Sources */,
+				AD8D18775024152F26B1B2C6 /* IncrementalEngine.swift in Sources */,
+				5D6385DB97DCB1F8B6641A13 /* PatternInput.swift in Sources */,
+				454FFC9A0DAC50F25886F540 /* PhoneNumber.swift in Sources */,
+				FB34E21014756AEDD51B1098 /* RuleExpander.swift in Sources */,
+				3DE1A808A429F8C36944741F /* SortedSequenceValidator.swift in Sources */,
+				E27D69A1C0642ED6EBCF3138 /* Trashcall.swift in Sources */,
+				D4199620130DDB8269A4DAAF /* TrashcallCallDirectoryProvider.swift in Sources */,
+				3BE49DD1644E78FC828EBDC2 /* TrashcallDashboardView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D4C234A2B120CB1E6D898D6A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D5D60D1A77BD11D8F7857D76 /* TrashcallApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		7A3CBD6894B4958309944308 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0C811A21C5F40C9223C4A61E /* TrashcallCore */;
+			targetProxy = 501E374512BC86B6189BE632 /* PBXContainerItemProxy */;
+		};
+		B821BEB05CDB33485DAE3790 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 90662D505FB3168A2F9C95D9 /* TrashcallCallDirectory */;
+			targetProxy = 4A2B4653A7977AF88A651C37 /* PBXContainerItemProxy */;
+		};
+		F7C4A28AA37B73D5E67574F9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0C811A21C5F40C9223C4A61E /* TrashcallCore */;
+			targetProxy = 367B38FC3AAE5D56F0299AA6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		669310DF6CFBF45D219E774A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.core;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		9D0F2AD9111449CB1DD9A3E1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/Trashcall.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 10;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AB37A547AF10593DDACA2424 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = L39339626G;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		B7DF99BBAAAD61C423E4A70A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Extensions/CallDirectory/CallDirectory.entitlements;
+				CURRENT_PROJECT_VERSION = 10;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extensions/CallDirectory/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.app.CallDirectoryExtension;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		DCDE94158EDE94E4AA866FB0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Extensions/CallDirectory/CallDirectory.entitlements;
+				CURRENT_PROJECT_VERSION = 10;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extensions/CallDirectory/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.app.CallDirectoryExtension;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		EF19747F54F6CDCCF5A9F0CE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = L39339626G;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		F7A8677C747FC3FACDFB0AC1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.core;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		FE0ECC790CB388A16BD33DCF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/Trashcall.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 10;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.trashcall.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		29129C78D5DD5DE25158CD37 /* Build configuration list for PBXNativeTarget "Trashcall" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9D0F2AD9111449CB1DD9A3E1 /* Debug */,
+				FE0ECC790CB388A16BD33DCF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		41077B4ABABBCF49711CA24A /* Build configuration list for PBXNativeTarget "TrashcallCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				669310DF6CFBF45D219E774A /* Debug */,
+				F7A8677C747FC3FACDFB0AC1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6D08AE3C329B87B648747F05 /* Build configuration list for PBXProject "Trashcall" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB37A547AF10593DDACA2424 /* Debug */,
+				EF19747F54F6CDCCF5A9F0CE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9EFD25540508212E12792496 /* Build configuration list for PBXNativeTarget "TrashcallCallDirectory" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DCDE94158EDE94E4AA866FB0 /* Debug */,
+				B7DF99BBAAAD61C423E4A70A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4F70FBF7CC19E1A4B2B68D0E /* Project object */;
+}

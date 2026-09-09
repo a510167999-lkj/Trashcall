@@ -1,0 +1,53 @@
+name: Auto Update Spam & Telemarketing Database
+
+on:
+  schedule:
+    # Runs at 02:00 UTC every Sunday
+    - cron: '0 2 * * 0'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  update-database:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          pip install pyyaml
+
+      - name: Fetch Datasets and Recompile Database
+        run: |
+          python3 scripts/fetch_and_build_database.py
+          test ! -f App/Resources/seed_database.sqlite-wal
+          python3 - <<'PY'
+          import sqlite3
+          db="App/Resources/seed_database.sqlite"
+          c=sqlite3.connect(db)
+          omitted=(18964046784, 8618964046784)
+          n=c.execute("SELECT COUNT(*) FROM identification_numbers WHERE phone_number IN (?,?)", omitted).fetchone()[0]
+          b=c.execute("SELECT COUNT(*) FROM blocking_numbers").fetchone()[0]
+          if n or b:
+              raise SystemExit(f"seed integrity failed default_omission={n} blocking={b}")
+          print("seed integrity ok", c.execute("SELECT COUNT(*) FROM identification_numbers").fetchone()[0])
+          PY
+
+      - name: Commit and Push if Changed
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add App/Resources/seed_database.sqlite
+          git rm -f --ignore-unmatch App/Resources/seed_database.sqlite-wal App/Resources/seed_database.sqlite-shm
+          if git diff --staged --quiet; then
+            echo "No changes detected in database."
+          else
+            git commit -m "chore(data): auto-update identification database [skip ci]"
+            git push
+          fi
