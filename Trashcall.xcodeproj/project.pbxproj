@@ -10,6 +10,7 @@
 		05622381003816CDDBECFFDB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 336FA11B74095114FAE384B1 /* Assets.xcassets */; };
 		324C0D85F851C542EFB29029 /* TrashcallBlockDirectory.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6AD86D105E25D61636369FD8 /* TrashcallBlockDirectory.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		35E443AAA5461081E7AF0ABB /* CallDirectoryProviderWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89884C7A363FE493AF650311 /* CallDirectoryProviderWrapper.swift */; };
+		3A258B92DB3BE714FEA8A25F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = EDFDB7C2F835F587C27C0074 /* PrivacyInfo.xcprivacy */; };
 		3BE49DD1644E78FC828EBDC2 /* TrashcallDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06324AA222A2C2B7F5C377D /* TrashcallDashboardView.swift */; };
 		3DE1A808A429F8C36944741F /* SortedSequenceValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E4B4B51497EED93019B288 /* SortedSequenceValidator.swift */; };
 		454FFC9A0DAC50F25886F540 /* PhoneNumber.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF2313F58F937A31EB42D9E6 /* PhoneNumber.swift */; };
@@ -130,6 +131,7 @@
 		D5C4F9B7A2189BBF77844906 /* DatabaseBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseBootstrap.swift; sourceTree = "<group>"; };
 		DF2313F58F937A31EB42D9E6 /* PhoneNumber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneNumber.swift; sourceTree = "<group>"; };
 		E5DA76DC244D98BF8EF8EBA6 /* CallRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRule.swift; sourceTree = "<group>"; };
+		EDFDB7C2F835F587C27C0074 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F06EEB3383D060FC14EF98F7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F291A3E20FE1BB646F49EF44 /* DeltaPackage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeltaPackage.swift; sourceTree = "<group>"; };
 		FBA61680F23A8D442544F6B6 /* ExtensionRunReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionRunReport.swift; sourceTree = "<group>"; };
@@ -186,6 +188,7 @@
 			children = (
 				336FA11B74095114FAE384B1 /* Assets.xcassets */,
 				4C069B908D20595C891FE06C /* Info.plist */,
+				EDFDB7C2F835F587C27C0074 /* PrivacyInfo.xcprivacy */,
 				9B088F5F33346409A93FE351 /* seed_database.sqlite */,
 			);
 			name = Resources;
@@ -483,6 +486,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5CDA9CEBB54ED417EDD0D80D /* Assets.xcassets in Resources */,
+				3A258B92DB3BE714FEA8A25F /* PrivacyInfo.xcprivacy in Resources */,
 				BF322B28662B08A45D2B80CA /* seed_database.sqlite in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
