@@ -115,30 +115,35 @@ def generate_landline_ranges():
     # Shanghai 021 (E.164: 8621 + 8 digits = 12 digits)
     add_range(landlines, 862131000000, 20000, "房产中介/推销座机 (上海 021-31)")
     add_range(landlines, 862151000000, 10000, "商业推销/电销座机 (上海 021-51)")
+    add_range(landlines, 862163500000, 10000, "商业借贷/中介座机 (上海 021-6350)")
+    add_range(landlines, 862180570000, 10000, "移动云呼/电销中继 (上海 021-8057)")
 
     # Beijing 010 (E.164: 8610 + 8 digits = 12 digits)
     add_range(landlines, 861053000000, 20000, "呼叫中心/外呼座机 (北京 010-53)")
     add_range(landlines, 861056000000, 10000, "商业推广/外呼座机 (北京 010-56)")
 
     # Shenzhen 0755 (E.164: 86755 + 8 digits = 13 digits)
-    add_range(landlines, 8675533000000, 10000, "金融理财/中介座机 (深圳 0755-33)")
+    add_range(landlines, 8675533000000, 20000, "金融理财/助贷中介 (深圳 0755-33)")
 
     # Guangzhou 020 (E.164: 8620 + 8 digits = 12 digits)
     add_range(landlines, 862038000000, 10000, "商业营销/外呼座机 (广州 020-38)")
 
     # Hangzhou 0571 (E.164: 86571 + 8 digits = 13 digits)
     add_range(landlines, 8657126000000, 10000, "电商推广/推销座机 (杭州 0571-26)")
-    add_range(landlines, 8657128000000, 10000, "商业推销/催收座机 (杭州 0571-28)")
+    add_range(landlines, 8657128000000, 30000, "保险电销/催收座机 (杭州 0571-28)")
+
+    # Bengbu 0552 (E.164: 86552 + 7 digits = 12 digits)
+    add_range(landlines, 865526070000, 10000, "商业推广/呼叫中心 (蚌埠 0552-60)")
 
     # Chengdu 028 (E.164: 8628 + 8 digits = 12 digits)
     add_range(landlines, 862860000000, 10000, "金融外包/电销座机 (成都 028-60)")
     add_range(landlines, 862868000000, 10000, "商业推广/外呼座机 (成都 028-68)")
 
     # Wuhan 027 (E.164: 8627 + 8 digits = 12 digits)
-    add_range(landlines, 862787000000, 10000, "客服外包/推销座机 (武汉 027-87)")
+    add_range(landlines, 862787000000, 20000, "金融催收/外呼座机 (武汉 027-87)")
 
     # Chongqing 023 (E.164: 8623 + 8 digits = 12 digits)
-    add_range(landlines, 862368000000, 10000, "小贷金融/中介座机 (重庆 023-68)")
+    add_range(landlines, 862368000000, 30000, "网络小贷/催收座机 (重庆 023-68)")
 
     print(f"✅ Generated {len(landlines):,} high-frequency landline numbers.")
     return landlines

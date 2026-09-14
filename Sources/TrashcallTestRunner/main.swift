@@ -21,6 +21,17 @@ func runSuite() async {
         }
     }
 
+    func testAsync(_ name: String, block: () async throws -> Void) async {
+        do {
+            try await block()
+            print("  ✅ PASS: \(name)")
+            passed += 1
+        } catch {
+            print("  ❌ FAIL: \(name) - \(error)")
+            failed += 1
+        }
+    }
+
     // 1. PhoneNumber Normalization Tests
     test("PhoneNumber Normalization (Chinese Mobile & Landline)") {
         let n1 = PhoneNumber.normalize("+86 138-0013-8000")
@@ -521,6 +532,90 @@ func runSuite() async {
         }
         assert(store.countBlocking() == 0)
         assert(store.countIdentification() == 5)
+    }
+
+    // 15. DatabaseUpdateService Delta Merge & User Rules Preservation
+    test("DatabaseUpdateService Delta Merge & User Rules Preservation") {
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("test_update_\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let store = CallDirectoryStore(databaseURL: tempURL)
+        try store.open()
+        try store.initializeSchema()
+
+        // Setup user custom rule
+        let userRule = ActiveRuleItem(
+            pattern: "13912345678",
+            action: .block,
+            label: nil,
+            count: 1
+        )
+        try store.addUserRule(userRule, numbers: [8613912345678])
+
+        let payload = RemoteDatabaseUpdate(
+            version: "2026.09.10.v1",
+            addedBlocking: [8613800000000],
+            removedBlocking: [],
+            addedIdentifications: [
+                RemoteIdentificationEntry(phone: 8695219999, label: "高频金融营销")
+            ],
+            removedIdentifications: []
+        )
+
+        let (addedBlock, addedIdent) = try DatabaseUpdateService.shared.applyUpdate(payload, to: store)
+        assert(addedBlock == 1, "Expected 1 added blocking number")
+        assert(addedIdent == 1, "Expected 1 added identification entry")
+
+        // Verify cloud rules exist
+        assert(store.containsBlocking(8613800000000) == true)
+        assert(store.containsIdentification(8695219999) == true)
+
+        // Verify user rule was preserved and NOT overridden
+        assert(store.containsBlocking(8613912345678) == true)
+        let rules = try store.getUserRules()
+        assert(rules.count == 1 && rules.first?.pattern == "13912345678")
+
+        // Verify version updated
+        let cloudVer = DatabaseUpdateService.shared.getCloudRulesVersion(in: store)
+        assert(cloudVer == "2026.09.10.v1")
+    }
+
+    // 16. Live Network Fetch from Tencent Cloud Endpoint
+    await testAsync("Live Network Fetch from Tencent Cloud Endpoint") {
+        let endpoint = DatabaseUpdateService.shared.getEndpointURL()
+        let update = try await DatabaseUpdateService.shared.fetchRemoteUpdate(from: endpoint)
+
+        assert(!update.version.isEmpty, "Cloud version must not be empty")
+        assert((update.addedBlocking?.count ?? 0) > 0, "Cloud added blocking must contain entries")
+        assert((update.addedIdentifications?.count ?? 0) > 0, "Cloud added identifications must contain entries")
+    }
+
+    // 17. PatternInput & RuleExpander for 7-digit vs 8-digit Landline Cities (0571 vs 0552)
+    test("PatternInput & RuleExpander for 7-digit vs 8-digit Landlines (0571 vs 0552)") {
+        // Hangzhou 0571: 4-digit area code + 8-digit local number = 12 digits
+        let hzPrefix = PatternInput.resolved("05712801")
+        assert(hzPrefix == "05712801****", "05712801 must auto-pad 4 stars for 8-digit local number (12 digits total), got \(hzPrefix)")
+
+        // Bengbu 0552: 4-digit area code + 7-digit local number = 11 digits
+        let bbPrefix = PatternInput.resolved("0552607")
+        assert(bbPrefix == "0552607****", "0552607 must auto-pad 4 stars for 7-digit local number (11 digits total), got \(bbPrefix)")
+
+        // User typed excess 5 stars on 7-digit city: auto-sanitize to 4 stars
+        let bbExcess = PatternInput.resolved("0552607*****")
+        assert(bbExcess == "0552607****", "Excess wildcard must be sanitized to 11 digits, got \(bbExcess)")
+
+        let expander = RuleExpander()
+        let bbNumbers = try expander.expandWildcard(bbPrefix)
+        let bbSet = Set(bbNumbers.map(\.rawValue))
+        // Incoming call 05526071234 -> E.164 is 865526071234 (12 digits) or domestic 5526071234 (10 digits)
+        assert(bbSet.contains(865526071234), "Bengbu expansion must contain E.164 form 865526071234")
+        assert(bbSet.contains(5526071234), "Bengbu expansion must contain domestic form 5526071234")
+
+        let hzNumbers = try expander.expandWildcard(hzPrefix)
+        let hzSet = Set(hzNumbers.map(\.rawValue))
+        // Incoming call 057128011234 -> E.164 is 8657128011234 (13 digits) or domestic 57128011234 (11 digits)
+        assert(hzSet.contains(8657128011234), "Hangzhou expansion must contain E.164 form 8657128011234")
+        assert(hzSet.contains(57128011234), "Hangzhou expansion must contain domestic form 57128011234")
     }
 
     print("==================================================")

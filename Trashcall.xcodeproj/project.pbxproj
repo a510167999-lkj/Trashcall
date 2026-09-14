@@ -27,6 +27,7 @@
 		B8596E63292D6D6793017A78 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 336FA11B74095114FAE384B1 /* Assets.xcassets */; };
 		BF322B28662B08A45D2B80CA /* seed_database.sqlite in Resources */ = {isa = PBXBuildFile; fileRef = 9B088F5F33346409A93FE351 /* seed_database.sqlite */; };
 		C37F8499E15794E8599AC33E /* DatabaseBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C4F9B7A2189BBF77844906 /* DatabaseBootstrap.swift */; };
+		A1B2C3D4E5F60001 /* DatabaseUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002 /* DatabaseUpdateService.swift */; };
 		C5F02184B0C4AFDAA3226DA8 /* ExtensionRunReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA61680F23A8D442544F6B6 /* ExtensionRunReport.swift */; };
 		CB124DC62F47DBD583AE4834 /* CallDirectoryManagerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE78FFE8B7D9006732F08D81 /* CallDirectoryManagerService.swift */; };
 		D4199620130DDB8269A4DAAF /* TrashcallCallDirectoryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D9033745ABC825D205E0F21 /* TrashcallCallDirectoryProvider.swift */; };
@@ -129,6 +130,7 @@
 		BE78FFE8B7D9006732F08D81 /* CallDirectoryManagerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDirectoryManagerService.swift; sourceTree = "<group>"; };
 		D06324AA222A2C2B7F5C377D /* TrashcallDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashcallDashboardView.swift; sourceTree = "<group>"; };
 		D5C4F9B7A2189BBF77844906 /* DatabaseBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseBootstrap.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60002 /* DatabaseUpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseUpdateService.swift; sourceTree = "<group>"; };
 		DF2313F58F937A31EB42D9E6 /* PhoneNumber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneNumber.swift; sourceTree = "<group>"; };
 		E5DA76DC244D98BF8EF8EBA6 /* CallRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRule.swift; sourceTree = "<group>"; };
 		EDFDB7C2F835F587C27C0074 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -228,6 +230,7 @@
 			children = (
 				3562BFE9233266D0D51BF384 /* CallDirectoryStore.swift */,
 				D5C4F9B7A2189BBF77844906 /* DatabaseBootstrap.swift */,
+				A1B2C3D4E5F60002 /* DatabaseUpdateService.swift */,
 				FBA61680F23A8D442544F6B6 /* ExtensionRunReport.swift */,
 			);
 			path = Storage;
@@ -519,6 +522,7 @@
 				4FC4DCC5EA8C2DE9FBF7E612 /* CallDirectoryStore.swift in Sources */,
 				575D39264FAAAD3F24F40FEF /* CallRule.swift in Sources */,
 				C37F8499E15794E8599AC33E /* DatabaseBootstrap.swift in Sources */,
+				A1B2C3D4E5F60001 /* DatabaseUpdateService.swift in Sources */,
 				85C684056447B3E09EE50915 /* DeltaPackage.swift in Sources */,
 				C5F02184B0C4AFDAA3226DA8 /* ExtensionRunReport.swift in Sources */,
 				AD8D18775024152F26B1B2C6 /* IncrementalEngine.swift in Sources */,

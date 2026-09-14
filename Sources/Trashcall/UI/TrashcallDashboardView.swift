@@ -40,6 +40,12 @@ public struct TrashcallDashboardView: View {
     // 折叠高级设置
     @State private var showAdvancedSettings: Bool = false
 
+    // 云端数据库自动更新状态
+    @State private var autoUpdateEnabled: Bool = true
+    @State private var cloudVersion: String = "—"
+    @State private var lastUpdateCheckText: String = "—"
+    @State private var isCheckingUpdate: Bool = false
+
     public let extensionId: String
     private let manager: CallDirectoryManagerService
     private let blockingManager: CallDirectoryManagerService
@@ -431,7 +437,54 @@ public struct TrashcallDashboardView: View {
                     }
                 }
 
-                // 7. 高级设置与系统底层诊断（折叠式收拢）
+                // 7. 云端数据库自动更新
+                Section {
+                    Toggle("每日自动更新云端数据库", isOn: $autoUpdateEnabled)
+                        .onChange(of: autoUpdateEnabled) { _, newValue in
+                            if let store = getStore(readOnly: false) {
+                                try? DatabaseUpdateService.shared.setAutoUpdateEnabled(newValue, in: store)
+                            }
+                        }
+
+                    HStack {
+                        Text("云端最新规则版本")
+                        Spacer()
+                        Text(cloudVersion)
+                            .font(.caption.monospaced())
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        Text("上次检查更新时间")
+                        Spacer()
+                        Text(lastUpdateCheckText)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Button {
+                        Task { await performUpdateCheck(force: true) }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if isCheckingUpdate {
+                                ProgressView().padding(.trailing, 8)
+                                Text("正在检查云端规则库更新...")
+                            } else {
+                                Label("立即检查云端更新", systemImage: "arrow.clockwise.cloud.fill")
+                            }
+                            Spacer()
+                        }
+                    }
+                    .disabled(isCheckingUpdate || isSyncing)
+                } header: {
+                    Text("云端数据库更新")
+                } footer: {
+                    Text("数据源自部署于腾讯云的实时防御规则库 (agentslee.online)，开启后在 App 启动与进入前台时自动增量同步最新高危号码段。")
+                        .font(.caption2)
+                }
+
+                // 8. 高级设置与系统底层诊断（折叠式收拢）
                 Section {
                     DisclosureGroup("高级设置与系统底层诊断", isExpanded: $showAdvancedSettings) {
                         VStack(alignment: .leading, spacing: 10) {
@@ -532,6 +585,9 @@ public struct TrashcallDashboardView: View {
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     checkClipboard()
+                    if autoUpdateEnabled {
+                        Task { await performUpdateCheck(force: false) }
+                    }
                 }
             }
             .task {
@@ -557,6 +613,11 @@ public struct TrashcallDashboardView: View {
                     }
                 }
                 isSyncing = false
+
+                // 启动完成后静默检查云端更新
+                if autoUpdateEnabled {
+                    await performUpdateCheck(force: false)
+                }
             }
         }
     }
@@ -650,6 +711,13 @@ public struct TrashcallDashboardView: View {
             blockingCount = store.countBlocking()
             identificationCount = store.countIdentification()
             seedVersion = (try? store.getVersion()) ?? "—"
+            cloudVersion = DatabaseUpdateService.shared.getCloudRulesVersion(in: store) ?? "—"
+            autoUpdateEnabled = DatabaseUpdateService.shared.isAutoUpdateEnabled(in: store)
+            if let lastCheck = DatabaseUpdateService.shared.getLastCheckTime(in: store) {
+                lastUpdateCheckText = runTimeText(lastCheck.timeIntervalSince1970)
+            } else {
+                lastUpdateCheckText = "尚未检查"
+            }
 
             var strategies: [ProtectionStrategy: Bool] = [:]
             for strategy in ProtectionStrategy.allCases {
@@ -674,6 +742,34 @@ public struct TrashcallDashboardView: View {
                     }
                 }
                 liveRuleIDs = live
+            }
+        }
+    }
+
+    private func performUpdateCheck(force: Bool) async {
+        isCheckingUpdate = true
+        if force {
+            errorMessage = nil
+            successNotice = nil
+        }
+        defer { isCheckingUpdate = false }
+
+        let result = await DatabaseUpdateService.shared.checkAndUpdate(force: force) {
+            await self.reloadEnabledExtensions()
+        }
+
+        await refreshStatus()
+
+        switch result {
+        case .upToDate(let version):
+            if force {
+                successNotice = "云端数据库已是最新版本 (\(version))。"
+            }
+        case .updated(let version, let blocking, let ident):
+            successNotice = "云端更新成功！已同步至 \(version)（新增挂断 \(blocking) 条，识别 \(ident) 条）。"
+        case .failed(let reason):
+            if force {
+                errorMessage = "检查更新失败: \(reason)"
             }
         }
     }

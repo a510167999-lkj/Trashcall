@@ -9,3 +9,8 @@ DerivedData/
 *.sqlite-wal
 *.sqlite-shm
 .workbuddy/
+__pycache__/
+*.py[cod]
+Server/logs/
+Server/state/
+Server/upstream/
