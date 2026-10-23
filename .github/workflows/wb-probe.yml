@@ -1,0 +1,17 @@
+name: wb-probe
+
+# 临时探针：验证「给老仓库新增的 workflow 能否注册上定时器」。
+# 结论得出后立即删除，不做任何别的事。
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: echo "schedule fired at $(date -u +%FT%TZ)"
