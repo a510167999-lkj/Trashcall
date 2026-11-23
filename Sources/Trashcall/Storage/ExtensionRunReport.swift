@@ -12,6 +12,7 @@ public struct ExtensionRunReport: Codable, Sendable {
     public var feedKind: String
     public var probedNumbers: [Int64]
     public var error: String?
+    public var directoryRevision: String?
 
     public static let defaultFileName = "extension_last_run.json"
     public static let identifyFileName = "extension_last_run_identify.json"
@@ -26,7 +27,8 @@ public struct ExtensionRunReport: Codable, Sendable {
         identificationFed: Int = 0,
         feedKind: String = CallDirectoryFeedKind.full.rawValue,
         probedNumbers: [Int64] = [],
-        error: String? = nil
+        error: String? = nil,
+        directoryRevision: String? = nil
     ) {
         self.at = at
         self.incremental = incremental
@@ -37,6 +39,7 @@ public struct ExtensionRunReport: Codable, Sendable {
         self.feedKind = feedKind
         self.probedNumbers = probedNumbers
         self.error = error
+        self.directoryRevision = directoryRevision
     }
 
     public static func fileURL(fileName: String = defaultFileName) -> URL? {

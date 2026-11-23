@@ -1,4 +1,6 @@
 {
+  "format": "snapshot",
+  "blocking_verified": false,
   "version": "rules.2026.09.14.0703",
   "updated_at": "2026-09-14T07:03:19.868233+00:00",
   "description": "Trashcall 官方云端防骚扰与黄页规则库 (Git: feaa52b5)",

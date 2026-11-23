@@ -5,21 +5,126 @@ import CallKit
 #endif
 
 public enum TrashcallExtensionID {
-    /// Bulk identification (labels) extension. Feeds identification numbers only.
-    public static let identification = "com.trashcall.app.CallDirectoryExtension"
-    /// Dedicated hang-up (blocking) extension. Feeds blocking numbers only.
-    /// Required because iOS 26/27 drops blocking entries from mixed requests.
-    public static let blocking = "com.trashcall.app.BlockDirectoryExtension"
+    public static let identificationFallback = "com.trashcall.app.CallDirectoryExtension"
+    public static let blockingFallback = "com.trashcall.app.BlockDirectoryExtension"
 
-    /// Both extensions, in reload order (identification first: cheaper failure surface).
-    public static let all: [String] = [identification, blocking]
+    /// Identification extension bundle ID as installed. 全能签 may rewrite the
+    /// source IDs; CallKit status/reload must use the live PlugIns identifiers.
+    public static var identification: String {
+        discoveredIdentifier(matching: .identification) ?? identificationFallback
+    }
+
+    /// Blocking extension bundle ID as installed.
+    public static var blocking: String {
+        discoveredIdentifier(matching: .blocking) ?? blockingFallback
+    }
+
+    public static var all: [String] { [identification, blocking] }
+
+    public static var embeddedCallDirectoryCount: Int {
+        callDirectoryPlugInBundles().count
+    }
+
+    private enum Kind {
+        case identification
+        case blocking
+    }
+
+    private static func callDirectoryPlugInBundles() -> [Bundle] {
+        guard let plugins = Bundle.main.builtInPlugInsURL else { return [] }
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: plugins,
+            includingPropertiesForKeys: nil
+        )) ?? []
+        return urls.compactMap { Bundle(url: $0) }.filter { bundle in
+            let ext = bundle.infoDictionary?["NSExtension"] as? [String: Any]
+            return ext?["NSExtensionPointIdentifier"] as? String == "com.apple.callkit.call-directory"
+        }
+    }
+
+    private static func discoveredIdentifier(matching kind: Kind) -> String? {
+        let bundles = callDirectoryPlugInBundles()
+        if let best = bundles.max(by: { score($0, kind) < score($1, kind) }),
+           score(best, kind) > 0 {
+            return best.bundleIdentifier
+        }
+        guard bundles.count >= 2 else { return nil }
+        let sorted = bundles.sorted {
+            ($0.bundleIdentifier ?? "") < ($1.bundleIdentifier ?? "")
+        }
+        switch kind {
+        case .identification: return sorted[0].bundleIdentifier
+        case .blocking: return sorted[1].bundleIdentifier
+        }
+    }
+
+    private static func score(_ bundle: Bundle, _ kind: Kind) -> Int {
+        let id = bundle.bundleIdentifier?.lowercased() ?? ""
+        let name = ((bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ?? "").lowercased()
+        let exec = ((bundle.object(forInfoDictionaryKey: "CFBundleExecutable") as? String) ?? "").lowercased()
+        switch kind {
+        case .identification:
+            var value = 0
+            if name.contains("识别") || name.contains("identify") { value += 10 }
+            if exec.contains("calldirectory") && !exec.contains("block") { value += 8 }
+            if id.contains("calldirectory") && !id.contains("block") { value += 8 }
+            if name.contains("挂断") || exec.contains("block") || id.contains("block") { value -= 20 }
+            return value
+        case .blocking:
+            var value = 0
+            if name.contains("挂断") || name.contains("block") { value += 10 }
+            if exec.contains("block") { value += 8 }
+            if id.contains("block") { value += 8 }
+            if name.contains("识别") { value -= 20 }
+            return value
+        }
+    }
 }
 
 /// State of the CallKit extension in the system settings.
 public enum ExtensionStatus: String, Sendable {
     case unknown = "未授权/未知"
     case disabled = "未在系统设置中开启"
-    case enabled = "已开启并在保护中"
+    case enabled = "已开启"
+}
+
+public enum DirectoryActivationStatus: Equatable, Sendable {
+    case settingsDisabled
+    case settingsUnknown
+    case unavailable
+    case pending
+    case loaded(count: Int)
+    case failed(String)
+
+    public static func resolve(
+        extensionStatus: ExtensionStatus, appGroupReady: Bool, revision: String?,
+        acceptedRevision: String?, report: ExtensionRunReport?, reloadError: String?
+    ) -> Self {
+        if extensionStatus == .disabled { return .settingsDisabled }
+        if extensionStatus == .unknown { return .settingsUnknown }
+        if !appGroupReady { return .unavailable }
+        if let reloadError { return .failed(reloadError) }
+        guard let revision, let report, report.directoryRevision == revision else { return .pending }
+        if let error = report.error { return .failed(error) }
+        guard acceptedRevision == revision else { return .pending }
+        return .loaded(count: report.blockingFed + report.identificationFed)
+    }
+
+    public var isLoaded: Bool {
+        if case .loaded = self { return true }
+        return false
+    }
+
+    public var message: String {
+        switch self {
+        case .settingsDisabled: "系统设置未开启"
+        case .settingsUnknown: "等待获取系统状态"
+        case .unavailable: "扩展无法读取当前本地规则"
+        case .pending: "已保存，等待系统加载"
+        case .loaded(let count): "系统已加载 \(count) 条"
+        case .failed(let error): "加载失败：\(error)"
+        }
+    }
 }
 
 /// Service running in the Main App to coordinate extension status and trigger reloads.
@@ -28,6 +133,10 @@ public final class CallDirectoryManagerService: Sendable {
 
     public init(extensionBundleIdentifier: String) {
         self.extensionBundleIdentifier = extensionBundleIdentifier
+    }
+
+    public static func acceptedRevisionKey(_ extensionID: String) -> String {
+        "call_directory_accepted_revision:" + extensionID
     }
 
     /// Checks whether the user has enabled the extension in iOS Settings -> Phone -> Call Blocking & Identification.
@@ -82,7 +191,9 @@ public final class CallDirectoryManagerService: Sendable {
         var attempt = 0
         while true {
             do {
+                let startedAt = Date().timeIntervalSince1970
                 try await performReload()
+                try recordAcceptedRevision(startedAt: startedAt)
                 return
             } catch {
                 attempt += 1
@@ -98,6 +209,20 @@ public final class CallDirectoryManagerService: Sendable {
     }
 
     #if canImport(CallKit) && (os(iOS) || targetEnvironment(macCatalyst))
+    private func recordAcceptedRevision(startedAt: TimeInterval) throws {
+        let reportFile: String
+        switch extensionBundleIdentifier {
+        case TrashcallExtensionID.identification: reportFile = ExtensionRunReport.identifyFileName
+        case TrashcallExtensionID.blocking: reportFile = ExtensionRunReport.blockFileName
+        default: return
+        }
+        guard let report = ExtensionRunReport.load(fileName: reportFile),
+              report.at >= startedAt, report.error == nil, let revision = report.directoryRevision else { return }
+        let store = CallDirectoryStore(databaseURL: DatabaseBootstrap.databaseURL())
+        try store.open(createIfNeeded: false)
+        try store.setMetadata(key: Self.acceptedRevisionKey(extensionBundleIdentifier), value: revision)
+    }
+
     private func performReload() async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             CXCallDirectoryManager.sharedInstance.reloadExtension(

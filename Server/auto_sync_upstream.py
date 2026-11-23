@@ -3,15 +3,18 @@
 """
 Trashcall Upstream Auto-Sync Pipeline.
 Fetches the latest open-source telephone records (metowolf/vCards),
-computes incremental deltas, and publishes rules_latest.json for client auto-updates.
+publishes an atomic rules_latest.json snapshot for client auto-updates.
 """
 
 import os
 import sys
 import glob
+import hashlib
 import json
 import subprocess
 from datetime import datetime, timezone
+
+from publish_rules import expand_pattern, normalize_phone as normalize_catalogue_phone
 
 try:
     import yaml
@@ -30,8 +33,29 @@ STATE_FILE = os.path.join(STATE_DIR, "last_sync_state.json")
 
 VCARDS_REPO = "https://github.com/metowolf/vCards.git"
 
-# Numbers excluded from auto-blocking/auto-identification
-OMISSIONS = {18964046784, 8618964046784}
+# Numbers excluded from auto-blocking/auto-identification (configurable via TRASHCALL_OMISSIONS env or omissions.json)
+def load_omissions():
+    omissions = set()
+    env_val = os.environ.get("TRASHCALL_OMISSIONS", "")
+    if env_val:
+        for item in env_val.split(","):
+            digits = "".join(c for c in item if c.isdigit())
+            if digits:
+                omissions.add(int(digits))
+    omissions_file = os.path.join(BASE_DIR, "omissions.json")
+    if os.path.exists(omissions_file):
+        try:
+            with open(omissions_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                for item in data:
+                    digits = "".join(c for c in str(item) if c.isdigit())
+                    if digits:
+                        omissions.add(int(digits))
+        except Exception:
+            pass
+    return omissions
+
+OMISSIONS = load_omissions()
 
 CATEGORY_MAPPING = {
     "房产中介": "房产中介",
@@ -45,8 +69,6 @@ CATEGORY_MAPPING = {
     "通讯服务": "通信运营商",
 }
 
-BLOCK_CATEGORIES = {"房产中介"}  # Can be tuned or expanded
-
 def log(msg):
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     line = f"[{now}] {msg}"
@@ -59,26 +81,9 @@ def log(msg):
         pass
 
 def normalize_phone(raw_str, default_cc="86"):
-    if not raw_str:
-        return None
-    raw = str(raw_str).strip()
-    digits = "".join(c for c in raw if c.isdigit())
-    if not digits:
-        return None
-    if raw.startswith("+"):
-        pass
-    elif raw.startswith("00") and len(digits) > 2:
-        digits = digits[2:]
-    else:
-        if digits.startswith("0") and len(digits) > 3:
-            digits = digits[1:]
-        digits = f"{default_cc}{digits}"
-    if 7 <= len(digits) <= 15:
-        val = int(digits)
-        if val in OMISSIONS:
-            return None
-        return val
-    return None
+    number = normalize_catalogue_phone(str(raw_str), default_cc) if raw_str else None
+    return number if number not in OMISSIONS else None
+
 
 def sync_git_upstream():
     os.makedirs(UPSTREAM_DIR, exist_ok=True)
@@ -101,18 +106,18 @@ def sync_git_upstream():
         if not cloned:
             log("❌ Could not clone vCards from any mirror; proceeding with empty or local cache.")
     else:
-        log("🔄 Pulling latest changes from metowolf/vCards...")
-        pulled = False
-        try:
-            subprocess.run(["git", "-C", VCARDS_DIR, "pull", "--depth", "1"], check=True, timeout=20)
-            pulled = True
-        except Exception as e:
-            log(f"⚠️ Standard git pull failed: {e}. Trying git remote mirror...")
+        log("🔄 Fetching latest changes from metowolf/vCards...")
+        fetched = False
+        for repo_url in mirrors:
             try:
-                subprocess.run(["git", "-C", VCARDS_DIR, "pull", "https://ghproxy.net/https://github.com/metowolf/vCards.git", "--depth", "1"], check=True, timeout=25)
-                pulled = True
-            except Exception as e2:
-                log(f"⚠️ Mirror pull also failed: {e2}. Proceeding with existing local cache.")
+                subprocess.run(["git", "-C", VCARDS_DIR, "fetch", repo_url, "HEAD", "--depth", "1"], check=True, timeout=25)
+                subprocess.run(["git", "-C", VCARDS_DIR, "reset", "--hard", "FETCH_HEAD"], check=True, timeout=10)
+                fetched = True
+                break
+            except Exception as e:
+                log(f"⚠️ Fetch from {repo_url} failed: {e}")
+        if not fetched:
+            log("⚠️ Could not fetch from any mirror; proceeding with existing local cache.")
 
     if os.path.exists(git_dir):
         try:
@@ -141,9 +146,8 @@ def parse_vcards():
         cat_path = os.path.join(data_dir, cat_dir_name)
         if not os.path.exists(cat_path):
             continue
-        is_block_cat = cat_dir_name in BLOCK_CATEGORIES
 
-        for yaml_path in glob.glob(os.path.join(cat_path, "*.yaml")):
+        for yaml_path in sorted(glob.glob(os.path.join(cat_path, "*.yaml"))):
             try:
                 with open(yaml_path, "r", encoding="utf-8") as handle:
                     doc = yaml.safe_load(handle)
@@ -156,10 +160,7 @@ def parse_vcards():
                     norm = normalize_phone(phone)
                     if not norm:
                         continue
-                    if is_block_cat:
-                        blocking_set.add(norm)
-                    else:
-                        ident_dict[norm] = f"{org_name} ({label_prefix})"
+                    ident_dict[norm] = f"{org_name} ({label_prefix})"
             except Exception:
                 continue
 
@@ -187,50 +188,34 @@ def save_current_state(state):
 def merge_custom_rules(blocking_set, ident_dict):
     custom_rules_file = os.path.join(BASE_DIR, "custom_rules.json")
     if not os.path.exists(custom_rules_file):
-        default_custom = {
-            "blocking_patterns": [
-                "05712801****",
-                "0552607****"
-            ],
-            "blocking_numbers": [],
-            "identification_patterns": []
-        }
-        try:
-            with open(custom_rules_file, "w", encoding="utf-8") as f:
-                json.dump(default_custom, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
+        return
+    with open(custom_rules_file, "r", encoding="utf-8") as f:
+        custom = json.load(f)
 
-    if os.path.exists(custom_rules_file):
-        try:
-            with open(custom_rules_file, "r", encoding="utf-8") as f:
-                custom = json.load(f)
-            from publish_rules import expand_pattern
-            for pat in custom.get("blocking_patterns", []):
-                try:
-                    nums = expand_pattern(pat)
-                    for n in nums:
-                        blocking_set.add(n)
-                        ident_dict.pop(n, None)
-                    log(f"📦 Merged custom blocking pattern: {pat} ({len(nums):,} numbers)")
-                except Exception as e:
-                    log(f"⚠️ Failed to expand custom pattern {pat}: {e}")
-            for num in custom.get("blocking_numbers", []):
-                blocking_set.add(num)
-                ident_dict.pop(num, None)
-            for item in custom.get("identification_patterns", []):
-                pat = item.get("pattern")
-                lbl = item.get("label", "自定义标记")
-                if pat:
-                    try:
-                        nums = expand_pattern(pat)
-                        for n in nums:
-                            if n not in blocking_set:
-                                ident_dict[n] = lbl
-                    except Exception as e:
-                        log(f"⚠️ Failed to expand custom ident pattern {pat}: {e}")
-        except Exception as e:
-            log(f"⚠️ Failed to load custom rules: {e}")
+    for pattern in custom.get("blocking_patterns", []):
+        for number in expand_pattern(pattern):
+            if number not in OMISSIONS:
+                ident_dict.setdefault(number, "待核验外呼号段")
+    for number in custom.get("blocking_numbers", []):
+        if number not in OMISSIONS:
+            ident_dict.setdefault(number, "待核验外呼号码")
+
+    for pattern in custom.get("verified_blocking_patterns", []):
+        blocking_set.update(n for n in expand_pattern(pattern) if n not in OMISSIONS)
+    for number in custom.get("verified_blocking_numbers", []):
+        if number not in OMISSIONS:
+            blocking_set.add(number)
+
+    for item in custom.get("identification_patterns", []):
+        for number in expand_pattern(item["pattern"]):
+            if number not in OMISSIONS:
+                ident_dict[number] = item["label"]
+    for item in custom.get("identification_numbers", []):
+        if item["phone"] not in OMISSIONS:
+            ident_dict[item["phone"]] = item["label"]
+    for number in blocking_set:
+        ident_dict.pop(number, None)
+
 
 def run_sync(force=False):
     log("🚀 Starting Trashcall Upstream Auto-Sync...")
@@ -238,14 +223,27 @@ def run_sync(force=False):
     state = load_previous_state()
     prev_commit = state.get("last_commit")
 
-    if not force and prev_commit == commit and os.path.exists(RULES_FILE):
+    config = os.path.join(BASE_DIR, "custom_rules.json")
+    with open(__file__, "rb") as pipeline:
+        config_hash = hashlib.sha256(pipeline.read())
+    with open(os.path.join(BASE_DIR, "publish_rules.py"), "rb") as publisher:
+        config_hash.update(publisher.read())
+    if os.path.exists(config):
+        with open(config, "rb") as rules:
+            config_hash.update(rules.read())
+    config_hash.update(str(sorted(OMISSIONS)).encode())
+    config_revision = config_hash.hexdigest()
+
+    if not force and prev_commit == commit and state.get("config_revision") == config_revision and os.path.exists(RULES_FILE):
         log("ℹ️ No new upstream commits since last sync. Rules are up to date.")
         return
 
     blocking_set, ident_dict = parse_vcards()
+    if not blocking_set and not ident_dict:
+        raise RuntimeError("Upstream catalogue is empty; keeping the last published snapshot.")
     merge_custom_rules(blocking_set, ident_dict)
 
-    version_tag = datetime.now(timezone.utc).strftime("%Y.%m.%d.%H%M")
+    version_tag = datetime.now(timezone.utc).strftime("%Y.%m.%d.%H%M%S%f")
     new_version = f"rules.{version_tag}"
 
     sorted_blocking = sorted(list(blocking_set))
@@ -255,6 +253,8 @@ def run_sync(force=False):
 
     payload = {
         "version": new_version,
+        "format": "snapshot",
+        "blocking_verified": True,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "description": f"Trashcall 官方云端防骚扰与黄页规则库 (Git: {commit[:8]})",
         "min_client_version": "1.0.0",
@@ -273,6 +273,7 @@ def run_sync(force=False):
 
     save_current_state({
         "last_commit": commit,
+        "config_revision": config_revision,
         "version": new_version,
         "updated_at": payload["updated_at"],
         "blocking_count": len(sorted_blocking),

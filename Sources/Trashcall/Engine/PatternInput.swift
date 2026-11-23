@@ -57,23 +57,32 @@ public enum PatternInput: Sendable {
         "0991"
     ]
 
+    static func hasSupportedCharacters(_ text: String, allowWildcards: Bool = true) -> Bool {
+        let punctuation = allowWildcards ? "+-().*?" : "+-()."
+        return text.allSatisfy { ($0.isASCII && $0.isNumber) || $0.isWhitespace || punctuation.contains($0) }
+    }
+
     public static func resolved(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return trimmed }
+        guard !trimmed.isEmpty, hasSupportedCharacters(trimmed) else { return trimmed }
         if trimmed.contains(where: { $0 == "*" || $0 == "?" }) {
             return sanitizeExcessWildcards(trimmed)
         }
         let digits = trimmed.filter { $0.isNumber && $0.isASCII }
         guard !digits.isEmpty else { return trimmed }
-        if isCompleteNumber(digits) {
+        if (trimmed.hasPrefix("+") && !digits.hasPrefix("86")) || (trimmed.hasPrefix("00") && !digits.hasPrefix("0086")) {
             return trimmed
         }
-        let target = typicalLength(digits)
-        let missing = max(0, target - digits.count)
+        let domesticDigits = trimmed.hasPrefix("0086") ? String(digits.dropFirst(2)) : digits
+        if isCompleteNumber(domesticDigits) {
+            return trimmed
+        }
+        let target = typicalLength(domesticDigits)
+        let missing = max(0, target - domesticDigits.count)
         // Pad only when the gap is small; a large gap means the prefix is too broad
         // to guess and must be rejected explicitly instead of producing a misaligned range.
         guard missing >= 1, missing <= maxAutoWildcardDigits else { return trimmed }
-        return digits + String(repeating: "*", count: missing)
+        return (trimmed.hasPrefix("+") ? "+" : "") + digits + String(repeating: "*", count: missing)
     }
 
     /// Automatically corrects patterns where users mistakenly add extra trailing asterisks
@@ -81,14 +90,17 @@ public enum PatternInput: Sendable {
     static func sanitizeExcessWildcards(_ pattern: String) -> String {
         let digits = pattern.filter { $0.isNumber && $0.isASCII }
         guard !digits.isEmpty else { return pattern }
-        let target = typicalLength(digits)
+        if (pattern.hasPrefix("+") && !digits.hasPrefix("86")) || (pattern.hasPrefix("00") && !digits.hasPrefix("0086")) {
+            return pattern
+        }
+        let target = pattern.hasPrefix("0086") ? 2 + typicalLength(String(digits.dropFirst(2))) : typicalLength(digits)
         let cleaned = pattern.filter { ($0.isNumber && $0.isASCII) || $0 == "*" || $0 == "?" }
         guard cleaned.count > target else { return pattern }
 
         let excessCount = cleaned.count - target
         let suffix = cleaned.suffix(excessCount)
         if suffix.allSatisfy({ $0 == "*" || $0 == "?" }) {
-            return String(cleaned.prefix(target))
+            return (pattern.hasPrefix("+") ? "+" : "") + cleaned.prefix(target)
         }
         return pattern
     }

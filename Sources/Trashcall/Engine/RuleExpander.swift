@@ -4,6 +4,7 @@ import Foundation
 public enum RuleExpansionError: Error, LocalizedError {
     case patternTooBroad(estimatedCount: Int64, maximumAllowed: Int64)
     case invalidWildcardPattern(String)
+    case nonTrailingWildcard
     case invalidRange(start: Int64, end: Int64)
 
     public var errorDescription: String? {
@@ -12,6 +13,8 @@ public enum RuleExpansionError: Error, LocalizedError {
             return "号段规则过于宽泛（预计产生 \(count) 个号码，系统单条规则上限为 \(max)），请缩小通配符范围以防超出 iOS 扩展容量。"
         case .invalidWildcardPattern(let pattern):
             return "无效的通配符号码格式: \(pattern)"
+        case .nonTrailingWildcard:
+            return "通配符只能连续出现在号码末尾。"
         case .invalidRange(let start, let end):
             return "无效的起始与终止号码区间: [\(start), \(end)]"
         }
@@ -66,7 +69,7 @@ public struct RuleExpander: Sendable {
 
     private func expansionPlan(_ pattern: String, defaultCountryCode: Int) throws -> ExpansionPlan {
         let trimmed = PatternInput.resolved(pattern)
-        guard !trimmed.isEmpty else {
+        guard !trimmed.isEmpty, PatternInput.hasSupportedCharacters(trimmed) else {
             throw RuleExpansionError.invalidWildcardPattern(pattern)
         }
 
@@ -77,6 +80,12 @@ public struct RuleExpander: Sendable {
                 throw RuleExpansionError.invalidWildcardPattern(pattern)
             }
             return .exact(entries)
+        }
+
+        let numberCharacters = trimmed.filter { $0.isASCII && ($0.isNumber || $0 == "*" || $0 == "?") }
+        let suffix = numberCharacters.suffix(wildcardCount)
+        guard numberCharacters.count > wildcardCount, suffix.allSatisfy({ $0 == "*" || $0 == "?" }) else {
+            throw RuleExpansionError.nonTrailingWildcard
         }
 
         var totalVariations: Int64 = 1

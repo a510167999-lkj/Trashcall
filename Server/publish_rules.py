@@ -5,7 +5,6 @@
 import os
 import json
 import argparse
-from datetime import datetime, timezone
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -23,17 +22,25 @@ EIGHT_DIGIT_AREA_CODES = {
     "0871", "0851", "0771", "0898", "0471", "0991"
 }
 
+def is_complete_china_number(digits):
+    return typical_national_length(digits) == len(digits) or (
+        len(digits) >= 11 and not digits.startswith(("0", "1", "95", "400", "800"))
+    )
+
+
 def normalize_phone(raw_str, default_cc="86"):
     if not raw_str:
         return None
     raw = str(raw_str).strip()
-    digits = "".join(c for c in raw if c.isdigit())
+    digits = "".join(c for c in raw if c.isascii() and c.isdigit())
     if not digits:
         return None
     if raw.startswith("+"):
         pass
     elif raw.startswith("00") and len(digits) > 2:
         digits = digits[2:]
+    elif default_cc == "86" and digits.startswith("86") and is_complete_china_number(digits[2:]):
+        pass
     else:
         if digits.startswith("0") and len(digits) > 3:
             digits = digits[1:]
@@ -63,25 +70,30 @@ def typical_national_length(digits: str) -> int:
 
 def sanitize_pattern(pattern: str) -> str:
     raw = pattern.strip()
-    if not raw:
-        return raw
-    digits = "".join(c for c in raw if c.isdigit())
+    if any(not ((c.isascii() and c.isdigit()) or c.isspace() or c in "+-().*?") for c in raw):
+        raise ValueError(f"Invalid number pattern: {pattern}")
+    cleaned = "".join(c for c in raw if (c.isascii() and c.isdigit()) or c in "+*?")
+    if "+" in cleaned[1:]:
+        raise ValueError(f"Invalid number pattern: {pattern}")
+    digits = "".join(c for c in cleaned if c.isdigit())
     if not digits:
-        return raw
-    target = typical_national_length(digits) if not digits.startswith("86") else 2 + typical_national_length(digits[2:])
-    has_wildcard = any(c in "*?" for c in raw)
-    if has_wildcard:
-        cleaned = "".join(c for c in raw if c.isdigit() or c in "*?")
-        if len(cleaned) > target:
-            excess = len(cleaned) - target
-            if all(c in "*?" for c in cleaned[-excess:]):
-                return cleaned[:target]
-        return raw
-    else:
-        missing = target - len(digits)
-        if 1 <= missing <= 5:
-            return digits + ("*" * missing)
-        return digits
+        return cleaned
+    if (cleaned.startswith("+") and not digits.startswith("86")) or (
+        cleaned.startswith("00") and not digits.startswith("0086")
+    ):
+        return cleaned
+
+    national = digits[4:] if digits.startswith("0086") else digits[2:] if digits.startswith("86") else digits
+    target = len(digits) - len(national) + typical_national_length(national)
+    prefix_width = int(cleaned.startswith("+"))
+    if any(c in "*?" for c in cleaned):
+        excess = len(cleaned) - prefix_width - target
+        if excess > 0 and all(c in "*?" for c in cleaned[-excess:]):
+            return cleaned[:-excess]
+    elif 1 <= target - len(digits) <= 5 and not is_complete_china_number(national):
+        return cleaned + "*" * (target - len(digits))
+    return cleaned
+
 
 def expand_pattern(raw_pattern: str, max_allowed: int = 100000, default_cc: str = "86"):
     pattern = sanitize_pattern(raw_pattern)
@@ -90,6 +102,9 @@ def expand_pattern(raw_pattern: str, max_allowed: int = 100000, default_cc: str 
         norm = normalize_phone(pattern, default_cc)
         return [norm] if norm else []
 
+    pattern = "".join(c for c in pattern if c.isdigit() or c in "+*?")
+    if not all(c in "*?" for c in pattern[-wildcards:]) or len(pattern) == wildcards:
+        raise ValueError("Wildcards must appear at the end of the number")
     total = 10 ** wildcards
     if total > max_allowed:
         raise ValueError(f"Pattern '{pattern}' too broad: {total} numbers > max {max_allowed}")
@@ -103,139 +118,55 @@ def expand_pattern(raw_pattern: str, max_allowed: int = 100000, default_cc: str 
 
     return list(range(start_num, end_num + 1))
 
-def load_rules():
-    if os.path.exists(RULES_FILE):
-        with open(RULES_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {
-        "version": datetime.now(timezone.utc).strftime("%Y.%m.%d.v1"),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "description": "Trashcall 官方云端防骚扰与黑名单规则库",
-        "min_client_version": "1.0.0",
-        "added_blocking": [],
-        "removed_blocking": [],
-        "added_identifications": [],
-        "removed_identifications": []
-    }
-
-def save_rules(data):
-    os.makedirs(os.path.dirname(RULES_FILE), exist_ok=True)
-    with open(RULES_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    print(f"✅ Rules published to {RULES_FILE}, version: {data.get('version')} ({len(data.get('added_blocking', []))} blocking, {len(data.get('added_identifications', []))} identifications)")
-
-def save_custom_pattern(kind: str, pattern: str, label: str = ""):
-    custom = {}
-    if os.path.exists(CUSTOM_RULES_FILE):
-        try:
-            with open(CUSTOM_RULES_FILE, "r", encoding="utf-8") as f:
-                custom = json.load(f)
-        except Exception:
-            pass
-    if "blocking_patterns" not in custom:
-        custom["blocking_patterns"] = []
-    if "identification_patterns" not in custom:
-        custom["identification_patterns"] = []
-
-    if kind == "block":
-        if pattern not in custom["blocking_patterns"]:
-            custom["blocking_patterns"].append(pattern)
-    elif kind == "identify":
-        custom["identification_patterns"].append({"pattern": pattern, "label": label})
-
-    with open(CUSTOM_RULES_FILE, "w", encoding="utf-8") as f:
-        json.dump(custom, f, indent=2, ensure_ascii=False)
-
-def sync_custom_rules(current_blocking: set, ident_dict: dict):
-    if not os.path.exists(CUSTOM_RULES_FILE):
-        return
-    try:
-        with open(CUSTOM_RULES_FILE, "r", encoding="utf-8") as f:
-            custom = json.load(f)
-    except Exception as e:
-        print(f"⚠️ Failed to load {CUSTOM_RULES_FILE}: {e}")
-        return
-
-    for pat in custom.get("blocking_patterns", []):
-        try:
-            numbers = expand_pattern(pat)
-            print(f"📦 Merged custom blocking pattern: {pat} ({len(numbers):,} numbers)")
-            for num in numbers:
-                current_blocking.add(num)
-                ident_dict.pop(num, None)
-        except Exception as e:
-            print(f"⚠️ Failed to expand custom pattern '{pat}': {e}")
-
-    for num in custom.get("blocking_numbers", []):
-        current_blocking.add(num)
-        ident_dict.pop(num, None)
-
-    for item in custom.get("identification_patterns", []):
-        pat = item.get("pattern")
-        lbl = item.get("label", "自定义标记")
-        if pat:
-            try:
-                numbers = expand_pattern(pat)
-                for num in numbers:
-                    if num not in current_blocking:
-                        ident_dict[num] = lbl
-            except Exception as e:
-                print(f"⚠️ Failed to expand custom ident pattern '{pat}': {e}")
-
 def main():
-    parser = argparse.ArgumentParser(description="Publish Trashcall Rules")
-    parser.add_argument("--add-block", nargs="+", type=int, help="Phone numbers to add to blocking list")
-    parser.add_argument("--add-block-pattern", nargs="+", help="Wildcard patterns (e.g. 05712801****, 0552607****) to expand and block")
-    parser.add_argument("--add-identify", nargs=2, action="append", metavar=("PHONE", "LABEL"), help="Phone number and label to add to identification")
-    parser.add_argument("--add-identify-pattern", nargs=2, action="append", metavar=("PATTERN", "LABEL"), help="Pattern and label to add to identification")
-    parser.add_argument("--sync-custom", action="store_true", help="Sync and expand all rules from custom_rules.json")
-    parser.add_argument("--bump-version", action="store_true", help="Bump version tag to now")
+    parser = argparse.ArgumentParser(description="Publish a complete Trashcall rules snapshot")
+    parser.add_argument("--add-block", nargs="+", type=int, help="Verified single numbers to block")
+    parser.add_argument("--add-block-pattern", nargs="+", help="Verified trailing-wildcard patterns to block")
+    parser.add_argument("--add-identify", nargs=2, action="append", metavar=("PHONE", "LABEL"))
+    parser.add_argument("--add-identify-pattern", nargs=2, action="append", metavar=("PATTERN", "LABEL"))
+    parser.add_argument("--sync-custom", action="store_true", help="Rebuild from upstream and custom rules")
+    parser.add_argument("--bump-version", action="store_true", help="Publish a new snapshot version")
     args = parser.parse_args()
 
-    data = load_rules()
-    data["updated_at"] = datetime.now(timezone.utc).isoformat()
-    now_tag = datetime.now(timezone.utc).strftime("%Y.%m.%d.%H%M")
-    data["version"] = f"rules.{now_tag}"
+    if args.add_block or args.add_block_pattern or args.add_identify or args.add_identify_pattern:
+        if os.path.exists(CUSTOM_RULES_FILE):
+            with open(CUSTOM_RULES_FILE, "r", encoding="utf-8") as f:
+                custom = json.load(f)
+        else:
+            custom = {}
 
-    current_blocking = set(data.get("added_blocking", []))
-    ident_dict = {item["phone"]: item["label"] for item in data.get("added_identifications", [])}
+        def number(value):
+            parsed = int(value)
+            if not 1_000_000 <= parsed <= 999_999_999_999_999:
+                raise ValueError(f"Invalid phone number: {value}")
+            return parsed
 
-    if args.sync_custom or args.bump_version or (not args.add_block and not args.add_block_pattern and not args.add_identify and not args.add_identify_pattern):
-        sync_custom_rules(current_blocking, ident_dict)
+        for phone in args.add_block or []:
+            verified = custom.setdefault("verified_blocking_numbers", [])
+            if number(phone) not in verified:
+                verified.append(number(phone))
+        for pattern in args.add_block_pattern or []:
+            if not expand_pattern(pattern):
+                raise ValueError(f"Invalid blocking pattern: {pattern}")
+            verified = custom.setdefault("verified_blocking_patterns", [])
+            if pattern not in verified:
+                verified.append(pattern)
+        for phone, label in args.add_identify or []:
+            if not label.strip():
+                raise ValueError("Identification label must not be empty")
+            custom.setdefault("identification_numbers", []).append({"phone": number(phone), "label": label})
+        for pattern, label in args.add_identify_pattern or []:
+            if not expand_pattern(pattern) or not label.strip():
+                raise ValueError(f"Invalid identification pattern or label: {pattern}")
+            custom.setdefault("identification_patterns", []).append({"pattern": pattern, "label": label})
+        temp_path = CUSTOM_RULES_FILE + ".tmp"
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(custom, f, indent=2, ensure_ascii=False)
+        os.replace(temp_path, CUSTOM_RULES_FILE)
 
-    if args.add_block:
-        for num in args.add_block:
-            current_blocking.add(num)
-            ident_dict.pop(num, None)
+    from auto_sync_upstream import run_sync
+    run_sync(force=True)
 
-    if args.add_block_pattern:
-        for pat in args.add_block_pattern:
-            numbers = expand_pattern(pat)
-            print(f"📦 Expanded pattern '{pat}' -> {len(numbers):,} numbers")
-            for num in numbers:
-                current_blocking.add(num)
-                ident_dict.pop(num, None)
-            save_custom_pattern("block", pat)
-
-    if args.add_identify:
-        for p_str, label in args.add_identify:
-            num = int(p_str)
-            if num not in current_blocking:
-                ident_dict[num] = label
-
-    if args.add_identify_pattern:
-        for pat, label in args.add_identify_pattern:
-            numbers = expand_pattern(pat)
-            print(f"🏷️ Expanded identification pattern '{pat}' -> {len(numbers):,} numbers")
-            for num in numbers:
-                if num not in current_blocking:
-                    ident_dict[num] = label
-            save_custom_pattern("identify", pat, label)
-
-    data["added_blocking"] = sorted(list(current_blocking))
-    data["added_identifications"] = [{"phone": k, "label": ident_dict[k]} for k in sorted(ident_dict.keys())]
-
-    save_rules(data)
 
 if __name__ == "__main__":
     main()

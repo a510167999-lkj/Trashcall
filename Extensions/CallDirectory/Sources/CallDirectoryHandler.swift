@@ -5,12 +5,11 @@ import TrashcallCore
 #elseif canImport(Trashcall)
 import Trashcall
 #endif
-
 @objc(CallDirectoryHandler)
 final class CallDirectoryHandler: TrashcallCallDirectoryProvider {
 
     override var appGroupIdentifier: String {
-        return "group.com.trashcall.shared"
+        return DatabaseBootstrap.appGroupId
     }
 
     override var databaseFileName: String {

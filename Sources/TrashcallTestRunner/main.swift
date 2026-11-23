@@ -49,15 +49,15 @@ func runSuite() async {
         let invalid = PhoneNumber.normalize("abc")
         assert(invalid == nil, "Invalid string must return nil")
 
-        let custom = PhoneNumber.normalize("18964046784")
-        assert(custom?.rawValue == 8618964046784, "Expected 8618964046784, got \(String(describing: custom?.rawValue))")
-        let customPlus = PhoneNumber.normalize("+86 189 6404 6784")
-        assert(customPlus?.rawValue == 8618964046784)
+        let custom = PhoneNumber.normalize("18912345678")
+        assert(custom?.rawValue == 8618912345678, "Expected 8618912345678, got \(String(describing: custom?.rawValue))")
+        let customPlus = PhoneNumber.normalize("+86 189 1234 5678")
+        assert(customPlus?.rawValue == 8618912345678)
 
-        let callKitForms = PhoneNumber.callKitEntries("18964046784")
+        let callKitForms = PhoneNumber.callKitEntries("18912345678")
         let formSet = Set(callKitForms.map(\.rawValue))
         assert(
-            formSet == [18964046784, 8618964046784],
+            formSet == [18912345678, 8618912345678],
             "WHY: CN incoming calls are often presented without 86; both forms must be indexed. Got \(formSet)"
         )
     }
@@ -186,9 +186,9 @@ func runSuite() async {
         assert(remainingRules.isEmpty, "User rules table should be empty")
     }
 
-    test("User can store 18964046784; prefix 9521 expands without typed stars") {
+    test("User can store 18912345678; prefix 9521 expands without typed stars") {
         assert(PatternInput.resolved("9521") == "9521****", "WHY: prefix entry must not require manual asterisks")
-        assert(PatternInput.resolved("18964046784") == "18964046784", "WHY: a complete mobile stays exact")
+        assert(PatternInput.resolved("18912345678") == "18912345678", "WHY: a complete mobile stays exact")
         assert(PatternInput.resolved("9521****") == "9521****")
         assert(PatternInput.resolved("400123") == "400123****")
         // Mobile prefix gap of 5 should pad to the full 11-digit national length
@@ -204,8 +204,8 @@ func runSuite() async {
         assert(fromPrefix.map(\.rawValue) == fromStars.map(\.rawValue))
         let prefixEstimate = try expander.estimateCount("9521")
         assert(prefixEstimate == 20_000)
-        let exactForms = try expander.expandWildcard("18964046784").map(\.rawValue)
-        assert(Set(exactForms) == [18964046784, 8618964046784])
+        let exactForms = try expander.expandWildcard("18912345678").map(\.rawValue)
+        assert(Set(exactForms) == [18912345678, 8618912345678])
 
         // Mobile segment rules must include BOTH the 11-digit national range AND
         // the 13-digit E.164 range so calls presented without the country code still match.
@@ -227,11 +227,11 @@ func runSuite() async {
         try store.open()
         try store.initializeSchema()
         try store.addUserRule(
-            ActiveRuleItem(pattern: "18964046784", action: .identify, label: "测试", count: 2),
+            ActiveRuleItem(pattern: "18912345678", action: .identify, label: "测试", count: 2),
             numbers: exactForms
         )
-        assert(store.containsIdentification(18964046784), "WHY: user-added 189 must persist in the live DB")
-        assert(store.containsIdentification(8618964046784))
+        assert(store.containsIdentification(18912345678), "WHY: user-added 189 must persist in the live DB")
+        assert(store.containsIdentification(8618912345678))
     }
 
     test("Legacy blocking converts to identification; seed import keeps explicitly sourced 189") {
@@ -249,11 +249,11 @@ func runSuite() async {
         let live = CallDirectoryStore(databaseURL: liveFile)
         try live.open()
         try live.initializeSchema()
-        try live.insertBlockingBatch([8695210001, 18964046784])
+        try live.insertBlockingBatch([8695210001, 18912345678])
         try live.convertBlockingToIdentification(defaultLabel: "骚扰电话")
         assert(live.countBlocking() == 0)
         assert(live.containsIdentification(8695210001))
-        assert(live.containsIdentification(18964046784), "WHY: 189 may exist in a live DB after conversion")
+        assert(live.containsIdentification(18912345678), "WHY: 189 may exist in a live DB after conversion")
 
         let seed = CallDirectoryStore(databaseURL: seedFile)
         try seed.open()
@@ -262,7 +262,7 @@ func runSuite() async {
             blocking: [],
             identifications: [
                 IdentificationEntry(phoneNumber: 8613800138000, label: "银行"),
-                IdentificationEntry(phoneNumber: 18964046784, label: "explicit-seed")
+                IdentificationEntry(phoneNumber: 18912345678, label: "explicit-seed")
             ],
             version: "seed-test"
         )
@@ -270,7 +270,7 @@ func runSuite() async {
         try seed.streamIdentificationEntries { imported.append($0) }
         try live.importIdentifications(imported)
         assert(live.containsIdentification(8613800138000))
-        assert(live.containsIdentification(18964046784), "WHY: seed may include 189 if explicitly sourced; default builder just omits it")
+        assert(live.containsIdentification(18912345678), "WHY: seed may include 189 if explicitly sourced; default builder just omits it")
     }
 
     test("Identification-only feed clears leftover blocking") {
@@ -311,11 +311,11 @@ func runSuite() async {
         try store.insertIdentificationBatch([
             IdentificationEntry(phoneNumber: 8613800138000, label: "银行")
         ])
-        try store.insertBlockingBatch([8618964046784, 18964046784])
+        try store.insertBlockingBatch([8618912345678, 18912345678])
 
         let blockMock = MockCallDirectoryContext()
         try CallDirectoryFeeder().feed(kind: .blockingOnly, from: store, into: blockMock)
-        assert(blockMock.addedBlocking == [18964046784, 8618964046784], "block feed must carry every blocking number, ascending")
+        assert(blockMock.addedBlocking == [18912345678, 8618912345678], "block feed must carry every blocking number, ascending")
         assert(blockMock.addedIdentification.isEmpty, "WHY: a mixed request gets its blocking entries dropped on iOS 26/27")
         assert(blockMock.isCompleted)
 
@@ -344,18 +344,18 @@ func runSuite() async {
         ])
 
         // 2. Add a user block rule
-        let blockForms = PhoneNumber.callKitEntries("18964046784").map(\.rawValue)
+        let blockForms = PhoneNumber.callKitEntries("18912345678").map(\.rawValue)
         let blockRule = ActiveRuleItem(
-            pattern: "18964046784",
+            pattern: "18912345678",
             action: .block,
             count: blockForms.count
         )
         try store.addUserRule(blockRule, numbers: blockForms)
 
         assert(store.countBlocking() == 2)
-        assert(store.containsBlocking(18964046784))
-        assert(store.containsBlocking(8618964046784))
-        assert(!store.containsIdentification(18964046784), "Must be mutually exclusive")
+        assert(store.containsBlocking(18912345678))
+        assert(store.containsBlocking(8618912345678))
+        assert(!store.containsIdentification(18912345678), "Must be mutually exclusive")
 
         // 3. Feed in .full mode
         let mock = MockCallDirectoryContext()
@@ -369,14 +369,14 @@ func runSuite() async {
 
         // 4. Switch from block to identify
         let identifyRule = ActiveRuleItem(
-            pattern: "18964046784",
+            pattern: "18912345678",
             action: .identify,
             label: "重新标记为好友",
             count: blockForms.count
         )
         try store.addUserRule(identifyRule, numbers: blockForms)
         assert(store.countBlocking() == 0, "Blocking should be cleared after switching to identify")
-        assert(store.containsIdentification(18964046784))
+        assert(store.containsIdentification(18912345678))
     }
 
     // 11. Protection Strategy Toggling Tests
@@ -458,12 +458,12 @@ func runSuite() async {
         ])
 
         // 2. Add user block rule
-        let forms = PhoneNumber.callKitEntries("18964046784").map(\.rawValue)
-        let blockRule = ActiveRuleItem(pattern: "18964046784", action: .block, count: forms.count)
+        let forms = PhoneNumber.callKitEntries("18912345678").map(\.rawValue)
+        let blockRule = ActiveRuleItem(pattern: "18912345678", action: .block, count: forms.count)
         try store.addUserRule(blockRule, numbers: forms)
 
         // Diagnosis 1: Blocked number
-        let diag1 = store.diagnose(input: "18964046784")
+        let diag1 = store.diagnose(input: "18912345678")
         if case .blocked = diag1 {
             // expected
         } else {
@@ -580,14 +580,20 @@ func runSuite() async {
         assert(cloudVer == "2026.09.10.v1")
     }
 
-    // 16. Live Network Fetch from Tencent Cloud Endpoint
-    await testAsync("Live Network Fetch from Tencent Cloud Endpoint") {
-        let endpoint = DatabaseUpdateService.shared.getEndpointURL()
-        let update = try await DatabaseUpdateService.shared.fetchRemoteUpdate(from: endpoint)
+    test("Published official catalogue decodes using the snapshot contract") {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let fixture = try Data(contentsOf: root.appendingPathComponent("Server/static/rules_latest.json"))
+        let update = try JSONDecoder().decode(RemoteDatabaseUpdate.self, from: fixture)
+        assert(!update.version.isEmpty && update.isSnapshot)
+        assert((update.addedBlocking?.count ?? 0) + (update.addedIdentifications?.count ?? 0) > 0)
+    }
 
-        assert(!update.version.isEmpty, "Cloud version must not be empty")
-        assert((update.addedBlocking?.count ?? 0) > 0, "Cloud added blocking must contain entries")
-        assert((update.addedIdentifications?.count ?? 0) > 0, "Cloud added identifications must contain entries")
+    if ProcessInfo.processInfo.environment["TRASHCALL_TEST_LIVE_RULES"] == "1" {
+        await testAsync("Fetch and decode the live official catalogue") {
+            let endpoint = DatabaseUpdateService.shared.getEndpointURL()
+            let update = try await DatabaseUpdateService.shared.fetchRemoteUpdate(from: endpoint)
+            assert(!update.version.isEmpty)
+        }
     }
 
     // 17. PatternInput & RuleExpander for 7-digit vs 8-digit Landline Cities (0571 vs 0552)
@@ -616,6 +622,427 @@ func runSuite() async {
         // Incoming call 057128011234 -> E.164 is 8657128011234 (13 digits) or domestic 57128011234 (11 digits)
         assert(hzSet.contains(8657128011234), "Hangzhou expansion must contain E.164 form 8657128011234")
         assert(hzSet.contains(57128011234), "Hangzhou expansion must contain domestic form 57128011234")
+    }
+
+    // 18. deleted_user_rules Tombstone Tracking
+    test("User Rule Deletion Tombstone Tracking & Cleanup") {
+        let tempDir = FileManager.default.temporaryDirectory
+        let dbURL = tempDir.appendingPathComponent("test_tombstone_\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: dbURL) }
+
+        let store = CallDirectoryStore(databaseURL: dbURL)
+        try store.open(readOnly: false)
+        try store.initializeSchema()
+        defer { store.close() }
+
+        let rule1 = ActiveRuleItem(pattern: "13800138000", action: .block, count: 2)
+        try store.addUserRule(rule1, numbers: [13800138000, 8613800138000])
+
+        let initialRules = try store.getUserRules()
+        assert(initialRules.count == 1)
+        let initialDeleted = try store.getDeletedUserRuleIDs()
+        assert(initialDeleted.isEmpty)
+
+        // Delete rule -> must write tombstone
+        try store.deleteUserRule(id: rule1.id, pattern: rule1.pattern, action: rule1.action, numbers: [13800138000, 8613800138000])
+        let rulesAfterDelete = try store.getUserRules()
+        assert(rulesAfterDelete.isEmpty)
+        let deletedIDs = try store.getDeletedUserRuleIDs()
+        assert(deletedIDs == [rule1.id], "Tombstone must contain deleted rule id")
+
+        // Re-add rule -> tombstone must be cleared
+        try store.addUserRule(rule1, numbers: [13800138000, 8613800138000])
+        let rulesAfterReadd = try store.getUserRules()
+        assert(rulesAfterReadd.count == 1)
+        let deletedAfterReadd = try store.getDeletedUserRuleIDs()
+        assert(deletedAfterReadd.isEmpty, "Re-adding rule must clear tombstone")
+    }
+
+    // 19. applyCloudSyncChanges Reconciliation
+    test("applyCloudSyncChanges Two-Way Merge & Conflict Resolution") {
+        let tempDir = FileManager.default.temporaryDirectory
+        let dbURL = tempDir.appendingPathComponent("test_cloud_merge_\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: dbURL) }
+
+        let store = CallDirectoryStore(databaseURL: dbURL)
+        try store.open(readOnly: false)
+        try store.initializeSchema()
+        defer { store.close() }
+
+        // Local has ruleA
+        let ruleA = ActiveRuleItem(pattern: "05712801****", action: .block, count: 2000)
+        let expander = RuleExpander()
+        let numbersA = try expander.expandWildcard(ruleA.pattern).map(\.rawValue)
+        try store.addUserRule(ruleA, numbers: numbersA)
+
+        // Incoming from cloud: ruleB (new) and ruleA (cloud requested deletion)
+        let ruleB = ActiveRuleItem(pattern: "0213470****", action: .identify, label: "上海骚扰", count: 2000)
+        let (added, deleted) = try store.applyCloudSyncChanges(
+            incomingRules: [ruleB],
+            deletedRuleIDs: [ruleA.id]
+        )
+
+        assert(added == 1, "Expected 1 added rule, got \(added)")
+        assert(deleted == 1, "Expected 1 deleted rule, got \(deleted)")
+
+        let currentRules = try store.getUserRules()
+        assert(currentRules.count == 1, "Should have 1 rule remaining")
+        assert(currentRules.first?.id == ruleB.id, "Remaining rule must be ruleB")
+        assert(store.containsIdentification(862134700000), "ruleB identification must be inserted")
+        assert(!store.containsBlocking(8657128010000), "ruleA blocking numbers must be cleared")
+    }
+
+    // 20. CloudKitSyncService Invariants
+    await testAsync("CloudKitSyncService Invariants & Status") {
+        assert(CloudKitSyncService.containerIdentifier == "iCloud.com.trashcall.app")
+        assert(CloudKitSyncService.recordType == "UserCustomRule")
+
+        assert(
+            CloudKitSyncService.hasRequiredCloudKitEntitlements(
+                containerIdentifiers: ["iCloud.com.trashcall.app"],
+                services: ["CloudKit"]
+            )
+        )
+        assert(
+            CloudKitSyncService.hasRequiredCloudKitEntitlements(
+                containerIdentifiers: ["iCloud.com.trashcall.app"],
+                services: ["*"]
+            )
+        )
+        assert(
+            !CloudKitSyncService.hasRequiredCloudKitEntitlements(
+                containerIdentifiers: [],
+                services: ["CloudKit"]
+            )
+        )
+        assert(
+            !CloudKitSyncService.hasRequiredCloudKitEntitlements(
+                containerIdentifiers: ["iCloud.com.trashcall.app"],
+                services: []
+            )
+        )
+
+        #if os(iOS)
+        let status = await CloudKitSyncService.shared.getAccountStatus()
+        assert(!status.description.isEmpty)
+        #endif
+    }
+
+    test("App Group prefers configured group") {
+        assert(DatabaseBootstrap.preferredAppGroupId == "group.0294e79a001ad3e1.1")
+        assert(!DatabaseBootstrap.appGroupId.isEmpty)
+    }
+
+    test("Call Directory extension IDs stay prefixed fallbacks off-device") {
+        assert(TrashcallExtensionID.identificationFallback == "com.trashcall.app.CallDirectoryExtension")
+        assert(TrashcallExtensionID.blockingFallback == "com.trashcall.app.BlockDirectoryExtension")
+        assert(TrashcallExtensionID.identification.hasPrefix("com.trashcall.app."))
+        assert(TrashcallExtensionID.blocking.hasPrefix("com.trashcall.app."))
+        assert(TrashcallExtensionID.identification != TrashcallExtensionID.blocking)
+    }
+
+    test("Extension Info.plist PrincipalClass and extension point invariants") {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // TrashcallTestRunner
+            .deletingLastPathComponent() // Sources
+            .deletingLastPathComponent() // repo root
+        let appPlistURL = repoRoot.appendingPathComponent("App/Resources/Info.plist")
+        let identPlistURL = repoRoot.appendingPathComponent("Extensions/CallDirectory/Resources/Info.plist")
+        let blockPlistURL = repoRoot.appendingPathComponent("Extensions/BlockDirectory/Resources/Info.plist")
+
+        guard let appData = try? Data(contentsOf: appPlistURL),
+              let appPlist = try? PropertyListSerialization.propertyList(from: appData, format: nil) as? [String: Any],
+              let identData = try? Data(contentsOf: identPlistURL),
+              let identPlist = try? PropertyListSerialization.propertyList(from: identData, format: nil) as? [String: Any],
+              let blockData = try? Data(contentsOf: blockPlistURL),
+              let blockPlist = try? PropertyListSerialization.propertyList(from: blockData, format: nil) as? [String: Any] else {
+            fatalError("Failed to read Info.plist files for validation")
+        }
+
+        let appVersion = appPlist["CFBundleShortVersionString"] as? String
+        let appBuild = appPlist["CFBundleVersion"] as? String
+
+        // Identification extension validation
+        assert(identPlist["CFBundleShortVersionString"] as? String == appVersion, "Ident version must match app")
+        assert(identPlist["CFBundleVersion"] as? String == appBuild, "Ident build must match app")
+        let identExt = identPlist["NSExtension"] as? [String: Any]
+        assert(identExt?["NSExtensionPointIdentifier"] as? String == "com.apple.callkit.call-directory")
+        assert(identExt?["NSExtensionPrincipalClass"] as? String == "CallDirectoryHandler", "Principal class must be CallDirectoryHandler")
+
+        // Block extension validation
+        assert(blockPlist["CFBundleShortVersionString"] as? String == appVersion, "Block version must match app")
+        assert(blockPlist["CFBundleVersion"] as? String == appBuild, "Block build must match app")
+        let blockExt = blockPlist["NSExtension"] as? [String: Any]
+        assert(blockExt?["NSExtensionPointIdentifier"] as? String == "com.apple.callkit.call-directory")
+        assert(blockExt?["NSExtensionPrincipalClass"] as? String == "CallDirectoryBlockHandler", "Principal class must be CallDirectoryBlockHandler")
+    }
+
+    // 24. Sideload Fallback: Reading bundled seed database when App Group is unavailable
+    test("Sideload Fallback: Bundled seed database readable and streamable without App Group") {
+        guard let seedURL = DatabaseBootstrap.bundledSeedURL() else {
+            fatalError("DatabaseBootstrap.bundledSeedURL() returned nil")
+        }
+        assert(FileManager.default.fileExists(atPath: seedURL.path), "Seed DB file must exist at \(seedURL.path)")
+
+        let store = CallDirectoryStore(databaseURL: seedURL)
+        try store.open(readOnly: true)
+        defer { store.close() }
+
+        let identCount = store.countIdentification()
+        assert(identCount > 400000, "Seed database must contain > 400k numbers for fallback protection, got \(identCount)")
+
+        let mockContext = MockCallDirectoryContext()
+        var streamCount = 0
+        try store.streamIdentificationEntries { entry in
+            if streamCount < 100 {
+                mockContext.addIdentificationEntry(withNextSequentialPhoneNumber: entry.phoneNumber, label: entry.label)
+                streamCount += 1
+            }
+        }
+        assert(mockContext.addedIdentification.count == 100, "Expected 100 streamed entries into mock context")
+    }
+
+    // 25. Build IPA Script Invariants
+    test("scripts/build_ipa.sh strips stale mobileprovisions and generates DER entitlements") {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // TrashcallTestRunner
+            .deletingLastPathComponent() // Sources
+            .deletingLastPathComponent() // repo root
+        let scriptURL = repoRoot.appendingPathComponent("scripts/build_ipa.sh")
+        guard let content = try? String(contentsOf: scriptURL, encoding: .utf8) else {
+            fatalError("Failed to read scripts/build_ipa.sh")
+        }
+
+        assert(content.contains("find \"${STAGED_APP}\" -name \"*.mobileprovision\" -delete"), "Must strip stale mobileprovision files")
+        assert(content.contains("rm -f \"${DESKTOP_IPA}\" \"${ROOT_IPA}\""), "Must remove old IPA before zipping to avoid stale payload merging")
+        assert(content.contains("--generate-entitlement-der"), "Must include --generate-entitlement-der for iOS 15+ codesign compatibility")
+    }
+
+    func withRulesStore(_ body: (CallDirectoryStore) throws -> Void) throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("trashcall-regression-\(UUID()).sqlite")
+        let store = CallDirectoryStore(databaseURL: url)
+        try store.open()
+        defer {
+            store.close()
+            try? FileManager.default.removeItem(at: url)
+        }
+        try store.initializeSchema()
+        try body(store)
+    }
+
+    test("Middle wildcards are rejected and country-code variants resolve equally") {
+        let expander = RuleExpander()
+        for bad in ["95210?00", "9521*000", "abc9521"] {
+            do {
+                _ = try expander.expandWildcard(bad)
+                assertionFailure("Unexpected valid pattern: \(bad)")
+            } catch is RuleExpansionError {}
+        }
+        let local = try expander.expandWildcard("95210000")
+        let bare = try expander.expandWildcard("8695210000")
+        let plus = try expander.expandWildcard("+86 95210000")
+        assert(local == bare && bare == plus)
+        let intl = try expander.expandWildcard("+852 2100 0000")
+        assert(intl.map(\.rawValue) == [85221000000])
+    }
+
+    test("Deleting an overlapping rule or disabling a strategy restores underlying rules and labels") {
+        try withRulesStore { store in
+            let number: Int64 = 8695210000
+            try store.insertIdentificationBatch([.init(phoneNumber: number, label: "原机构标签")])
+            let range = try store.addUserRule(.init(pattern: "9521000*", action: .block))
+            let exact = try store.addUserRule(.init(pattern: "95210000", action: .block))
+            try store.setStrategy(.block95, enabled: true)
+            try store.setStrategy(.block95, enabled: false)
+            assert(store.containsBlocking(number))
+            try store.deleteUserRules(ids: [exact.id])
+            assert(store.containsBlocking(number))
+            try store.deleteUserRules(ids: [range.id])
+            assert(store.diagnose(input: "95210000") == .identified(label: "原机构标签"))
+        }
+    }
+
+    test("Official snapshots withdraw old entries and roll back without removing local exceptions") {
+        try withRulesStore { store in
+            let service = DatabaseUpdateService.shared
+            let old: Int64 = 8695210000
+            let new: Int64 = 8695210001
+            let blocked: Int64 = 8613800138000
+            try store.insertIdentificationBatch([.init(phoneNumber: old, label: "原机构标签")])
+            _ = try store.addUserRule(.init(pattern: "13800138000", action: .block))
+            let allow = try store.addUserRule(.init(pattern: "95210001", action: .allow))
+            try service.applyUpdate(.init(version: "v1", addedBlocking: [old]), to: store)
+            assert(store.containsBlocking(old))
+            try service.applyUpdate(.init(version: "v2", addedBlocking: [new]), to: store)
+            assert(store.diagnose(input: "95210000") == .identified(label: "原机构标签"))
+            assert(!store.containsBlocking(new))
+            assert(store.containsBlocking(blocked))
+            let previous = try store.rollbackOfficialRules()
+            assert(previous == "v1" && store.containsBlocking(old))
+            let suppressed = try store.getMetadata(key: "withdrawn_cloud_rules_version")
+            assert(suppressed == "v2")
+            try store.deleteUserRules(ids: [allow.id])
+            assert(!store.containsBlocking(new))
+        }
+    }
+
+    test("Legacy official blockers are labelled and an invalid delta leaves the saved snapshot intact") {
+        try withRulesStore { store in
+            let number: Int64 = 8695210000
+            let json = Data(#"{"version":"v1","added_blocking":[8695210000]}"#.utf8)
+            let legacy = try JSONDecoder().decode(RemoteDatabaseUpdate.self, from: json)
+            let service = DatabaseUpdateService.shared
+            try service.applyUpdate(legacy, to: store)
+            assert(!store.containsBlocking(number) && store.containsIdentification(number))
+            do {
+                try service.applyUpdate(.init(version: "v2", addedBlocking: [number], format: .delta, baseVersion: "missing"), to: store)
+                assertionFailure("Accepted a delta for the wrong version")
+            } catch StoreError.invalidRule {}
+            let saved = try store.getMetadata(key: "cloud_rules_version")
+            assert(saved == "v1" && store.containsIdentification(number))
+
+            try service.applyUpdate(.init(version: "v2", addedBlocking: [number], format: .delta, baseVersion: "v1"), to: store)
+            assert(store.containsBlocking(number))
+            let prior = try store.rollbackOfficialRules()
+            assert(prior == "v1" && !store.containsBlocking(number) && store.containsIdentification(number))
+        }
+    }
+
+    test("Existing installations rebuild from the bundled catalogue and stop loading unsafe legacy ranges") {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("trashcall-migration-\(UUID()).sqlite")
+        let store = CallDirectoryStore(databaseURL: url)
+        try store.open()
+        defer {
+            store.close()
+            try? FileManager.default.removeItem(at: url)
+        }
+        try store.initializeSchema()
+        let legacyID = UUID().uuidString
+        try store.execute(sql: """
+            INSERT INTO user_rules VALUES ('\(legacyID)', '95210?00', '\(RuleActionType.block.rawValue)', NULL, 1802, 1);
+            INSERT INTO blocking_numbers VALUES (8695210001), (8613800138000);
+            INSERT INTO user_blocking_numbers VALUES (8695210001);
+            INSERT INTO identification_numbers VALUES (8613800138123, '旧官方标签');
+            """)
+        try store.setMetadata(key: "cloud_rules_version", value: "legacy")
+        try store.setMetadata(key: "last_update_check_at", value: "123")
+        try DatabaseBootstrap.prepareDatabase(at: url)
+        assert(!store.containsBlocking(8695210001))
+        assert(!store.containsBlocking(8613800138000) && store.containsIdentification(8613800138000))
+        assert(store.diagnose(input: "13800138123") == .identified(label: "旧官方标签"))
+        let checkedAt = try store.getMetadata(key: "last_update_check_at")
+        assert(checkedAt == nil)
+        let migrated = try store.getUserRules()
+        assert(migrated.count == 1 && migrated[0].count == 0)
+        let initialRevision = try store.getMetadata(key: "directory_revision")
+        try DatabaseBootstrap.prepareDatabase(at: url)
+        let nextRevision = try store.getMetadata(key: "directory_revision")
+        assert(initialRevision != nil && initialRevision == nextRevision)
+        try DatabaseUpdateService.shared.applyUpdate(.init(version: "legacy", addedBlocking: []), to: store)
+        assert(!store.containsIdentification(8613800138123))
+    }
+
+    test("Revisions settle same-pattern CloudKit edits, invalid updates and offline deletes") {
+        try withRulesStore { store in
+            let number: Int64 = 8695210000
+            let original = try store.addUserRule(.init(pattern: "95210000", action: .block))
+            let replacement = try store.addUserRule(.init(pattern: "+86 95210000", action: .identify, label: "用户标签"))
+            assert(original.id == replacement.id)
+            try store.applyCloudSyncChanges(incomingRules: [original], deletedRuleIDs: [])
+            assert(store.diagnose(input: "95210000") == .identified(label: "用户标签"))
+
+            let remoteDuplicate = ActiveRuleItem(pattern: "8695210000", action: .block, createdAt: .distantPast)
+            try store.applyCloudSyncChanges(incomingRules: [remoteDuplicate], deletedRuleIDs: [])
+            let retired = try store.getDeletedUserRuleIDs()
+            assert(retired.contains(remoteDuplicate.id) && !store.containsBlocking(number))
+
+            let invalid = ActiveRuleItem(id: original.id, pattern: "95210?00", action: .block, updatedAt: .distantFuture)
+            do {
+                try store.applyCloudSyncChanges(incomingRules: [invalid], deletedRuleIDs: [])
+                assertionFailure("Accepted an invalid cloud pattern")
+            } catch is RuleExpansionError {}
+            assert(store.diagnose(input: "95210000") == .identified(label: "用户标签"))
+
+            try store.deleteUserRules(ids: [original.id])
+            try store.applyCloudSyncChanges(incomingRules: [replacement], deletedRuleIDs: [])
+            assert(!store.containsBlocking(number) && !store.containsIdentification(number))
+        }
+    }
+
+    test("Extension report remains backward compatible and preserves the submitted directory revision") {
+        let legacy = Data(#"{"at":1,"incremental":false,"appGroupOK":true,"dbExists":true,"blockingFed":0,"identificationFed":1,"feedKind":"identificationOnly","probedNumbers":[]}"#.utf8)
+        let original = try JSONDecoder().decode(ExtensionRunReport.self, from: legacy)
+        assert(original.directoryRevision == nil)
+        var updated = original
+        updated.directoryRevision = "directory-2"
+        let roundTrip = try JSONDecoder().decode(ExtensionRunReport.self, from: JSONEncoder().encode(updated))
+        assert(roundTrip.directoryRevision == "directory-2")
+    }
+
+    test("Enabled extensions report loaded only after the matching revision is accepted") {
+        let report = ExtensionRunReport(incremental: false, appGroupOK: true, dbExists: true,
+                                        identificationFed: 10, directoryRevision: "rev2")
+        func state(_ status: ExtensionStatus, _ accepted: String?, error: String? = nil) -> DirectoryActivationStatus {
+            DirectoryActivationStatus.resolve(extensionStatus: status, appGroupReady: true, revision: "rev2",
+                                              acceptedRevision: accepted, report: report, reloadError: error)
+        }
+        assert(state(.disabled, "rev2") == .settingsDisabled)
+        assert(state(.enabled, nil) == .pending)
+        assert(state(.enabled, "rev1") == .pending)
+        assert(state(.enabled, "rev2", error: "CallKit error") == .failed("CallKit error"))
+        assert(state(.enabled, "rev2") == .loaded(count: 10))
+    }
+
+    test("Supplemental caller IDs survive strategy changes and respect local rules") {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("trashcall-supplement-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let emptySeedURL = directory.appendingPathComponent("base.sqlite")
+        let vendorSeedURL = directory.appendingPathComponent("vendor.sqlite")
+        let liveURL = directory.appendingPathComponent("live.sqlite")
+        let original: Int64 = 8695211111
+        let vendorOnly: Int64 = 8695212222
+
+        let base = CallDirectoryStore(databaseURL: emptySeedURL)
+        try base.open()
+        try base.initializeSchema()
+        try base.insertIdentificationBatch([.init(phoneNumber: original, label: "现有标签")])
+        try base.setMetadata(key: "version", value: "base")
+        base.checkpoint()
+        base.close()
+        try FileManager.default.copyItem(at: emptySeedURL, to: vendorSeedURL)
+
+        let vendor = CallDirectoryStore(databaseURL: vendorSeedURL)
+        try vendor.open()
+        try vendor.execute(sql: """
+            INSERT INTO supplemental_identifications VALUES (\(original), '供应商标签'), (\(vendorOnly), '广告推销');
+            """)
+        try vendor.setMetadata(key: "supplemental_identification_version", value: "fixture")
+        vendor.close()
+
+        try DatabaseBootstrap.prepareDatabase(at: liveURL, bundledSeed: vendorSeedURL)
+        let live = CallDirectoryStore(databaseURL: liveURL)
+        try live.open()
+        defer { live.close() }
+        assert(live.countIdentification() == 2)
+        assert(live.diagnose(input: "95211111") == .identified(label: "现有标签"))
+        assert(live.diagnose(input: "95212222") == .identified(label: "广告推销"))
+        var streamed: [Int64] = []
+        try live.streamIdentificationEntries { streamed.append($0.phoneNumber) }
+        assert(streamed == [original, vendorOnly])
+
+        try live.setStrategy(.block95, enabled: true)
+        assert(live.containsBlocking(original) && !live.containsIdentification(original))
+        assert(!live.containsBlocking(vendorOnly) && live.containsIdentification(vendorOnly))
+        let user = try live.addUserRule(ActiveRuleItem(pattern: "95212222", action: .block))
+        assert(live.containsBlocking(vendorOnly) && !live.containsIdentification(vendorOnly))
+        try live.deleteUserRules(ids: [user.id])
+        assert(live.containsIdentification(vendorOnly))
+
+        try DatabaseBootstrap.prepareDatabase(at: liveURL, bundledSeed: emptySeedURL)
+        assert(!live.containsIdentification(vendorOnly))
+        assert(live.containsBlocking(original))
     }
 
     print("==================================================")

@@ -6,18 +6,24 @@ import SwiftUI
 import UIKit
 #endif
 
-/// Identification-only dashboard: labels incoming calls, does not attempt hang-up.
+/// Presents the saved rules and the activation state of both Call Directory extensions.
 public struct TrashcallDashboardView: View {
     @State private var extensionStatus: ExtensionStatus = .unknown
     @State private var blockingCount: Int = 0
     @State private var identificationCount: Int = 0
     @State private var seedVersion: String = "—"
     @State private var isSyncing: Bool = false
+    @State private var extensionReload: Task<[Error], Never>?
+    @State private var reloadQueued = false
     @State private var customRulePattern: String = ""
     @State private var selectedAction: RuleActionType = .block
     @State private var identifyLabel: String = "推销骚扰"
     @State private var activeRules: [ActiveRuleItem] = []
-    @State private var liveRuleIDs: Set<UUID> = []
+    @State private var directoryRevision: String?
+    @State private var acceptedRevisions: [String: String] = [:]
+    @State private var reloadFailures: [String: String] = [:]
+    @State private var appReady = false
+    @State private var confirmOfficialRollback = false
     @State private var lastExtensionRun: ExtensionRunReport?
     @State private var lastBlockRun: ExtensionRunReport?
     @State private var blockingStatus: ExtensionStatus = .unknown
@@ -27,7 +33,6 @@ public struct TrashcallDashboardView: View {
 
     // 剪贴板智能感知状态
     @State private var detectedClipboardNumber: String?
-    @State private var lastProcessedClipboard: String = ""
     @Environment(\.scenePhase) private var scenePhase
 
     // 预设高危策略开关状态
@@ -46,6 +51,12 @@ public struct TrashcallDashboardView: View {
     @State private var lastUpdateCheckText: String = "—"
     @State private var isCheckingUpdate: Bool = false
 
+    // iCloud 自定义规则云同步状态（用户专属私有库）
+    @State private var iCloudAccountStatusText: String = "检测中..."
+    @State private var lastICloudSyncText: String = "—"
+    @State private var isSyncingICloud: Bool = false
+    @State private var iCloudSyncQueued = false
+
     public let extensionId: String
     private let manager: CallDirectoryManagerService
     private let blockingManager: CallDirectoryManagerService
@@ -61,12 +72,33 @@ public struct TrashcallDashboardView: View {
     /// Reloads every extension the user has enabled in system settings.
     /// Returns the error of each failed reload (empty = all succeeded).
     private func reloadEnabledExtensions() async -> [Error] {
+        if let extensionReload {
+            reloadQueued = true
+            return await extensionReload.value
+        }
+        let request = Task {
+            var errors: [Error]
+            repeat {
+                reloadQueued = false
+                errors = await reloadExtensionsOnce()
+            } while reloadQueued && !Task.isCancelled
+            return errors
+        }
+        extensionReload = request
+        let errors = await request.value
+        extensionReload = nil
+        return errors
+    }
+
+    private func reloadExtensionsOnce() async -> [Error] {
         var errors: [Error] = []
         for service in [manager, blockingManager] {
             guard await service.checkStatus() == .enabled else { continue }
             do {
                 try await service.reloadExtension()
+                reloadFailures.removeValue(forKey: service.extensionBundleIdentifier)
             } catch {
+                reloadFailures[service.extensionBundleIdentifier] = error.localizedDescription
                 errors.append(error)
             }
         }
@@ -83,12 +115,11 @@ public struct TrashcallDashboardView: View {
                             HStack {
                                 Image(systemName: "doc.on.clipboard.fill")
                                     .foregroundColor(.blue)
-                                Text("检测到刚复制的号码")
+                                Text("已粘贴的号码")
                                     .font(.subheadline.weight(.semibold))
                                 Spacer()
                                 Button {
                                     withAnimation {
-                                        lastProcessedClipboard = clipNum
                                         detectedClipboardNumber = nil
                                     }
                                 } label: {
@@ -144,7 +175,7 @@ public struct TrashcallDashboardView: View {
 
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("全库已布防")
+                                Text("本机规则条目")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                 Text("\(blockingCount + identificationCount)")
@@ -172,30 +203,26 @@ public struct TrashcallDashboardView: View {
 
                         Divider()
 
-                        HStack(spacing: 6) {
-                            if blockingCount == 0 {
-                                Image(systemName: "info.circle.fill")
-                                    .foregroundColor(.blue)
-                                Text("当前状态：全部【来电识别打标】（会响铃并显示标记）。若需零响铃静默挂断，可在下方开启策略开关。")
-                            } else if identificationCount <= 300 {
-                                Image(systemName: "shield.fill")
-                                    .foregroundColor(.green)
-                                Text("当前状态：高危号段已【全量自动挂断】（呼入静默掐断不响铃）。仅保留官方政企客服打标。")
-                            } else {
-                                Image(systemName: "bolt.shield.fill")
-                                    .foregroundColor(.orange)
-                                Text("当前状态：混合防御（\(blockingCount) 条静默挂断，\(identificationCount) 条来电打标）。")
-                            }
+                        VStack(alignment: .leading, spacing: 8) {
+                            activationRow("来电识别", manager: manager, status: extensionStatus, report: lastExtensionRun)
+                            activationRow("自动挂断", manager: blockingManager, status: blockingStatus, report: lastBlockRun)
                         }
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if needsActivation || !appReady {
+                            Button("重新加载系统扩展") {
+                                Task { await triggerSync() }
+                            }
+                            .disabled(isSyncing || extensionReload != nil || isCheckingUpdate || isSyncingICloud)
+                        }
 
-                        if extensionStatus != .enabled || blockingStatus != .enabled {
+                        if TrashcallExtensionID.embeddedCallDirectoryCount < 2 {
+                            Text("未检测到安装包内的识别/挂断扩展。若使用全能签等工具自签，请确保：1. 未勾选「移除扩展/插件」；2. 若修改主程序 Bundle ID，两个扩展的 Bundle ID 须保持为「主程序ID.xxx」格式。")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        } else if extensionStatus != .enabled || blockingStatus != .enabled {
                             Button {
                                 Task { await manager.openCallDirectorySettings() }
                             } label: {
-                                Label("前往开启「通话阻止与身份识别」中的两个开关", systemImage: "gearshape.fill")
+                                Label("前往开启「来电阻止与身份识别」中的两个开关", systemImage: "gearshape.fill")
                                     .font(.footnote.weight(.semibold))
                                     .frame(maxWidth: .infinity)
                             }
@@ -338,7 +365,7 @@ public struct TrashcallDashboardView: View {
                 } header: {
                     Text("号码沙盒诊断与测试")
                 } footer: {
-                    Text("输入任意号码可立即模拟其在本地离线库中的防御表现，无需真机互拨测试。")
+                    Text("查看号码在本地规则库中的匹配结果。")
                         .font(.caption2)
                 }
 
@@ -351,9 +378,15 @@ public struct TrashcallDashboardView: View {
                             .keyboardType(.numbersAndPunctuation)
                             #endif
 
+                        PasteButton(payloadType: String.self) { values in
+                            if let value = values.first { usePastedNumber(value) }
+                        }
+                        .accessibilityLabel("粘贴号码")
+
                         Picker("响应动作", selection: $selectedAction) {
-                            Text("🚫 自动挂断 (系统阻断)").tag(RuleActionType.block)
-                            Text("🏷️ 来电识别 (显示标记)").tag(RuleActionType.identify)
+                            Text("挂断").tag(RuleActionType.block)
+                            Text("打标").tag(RuleActionType.identify)
+                            Text("允许来电").tag(RuleActionType.allow)
                         }
                         .pickerStyle(.segmented)
 
@@ -376,8 +409,8 @@ public struct TrashcallDashboardView: View {
                             Task { await addRule() }
                         } label: {
                             Label(
-                                selectedAction == .block ? "添加为自动挂断黑名单" : "添加为来电识别",
-                                systemImage: selectedAction == .block ? "nosign" : "tag.fill"
+                                "保存\(actionTitle)",
+                                systemImage: selectedAction == .block ? "nosign" : (selectedAction == .allow ? "checkmark.shield" : "tag.fill")
                             )
                             .frame(maxWidth: .infinity)
                         }
@@ -396,11 +429,52 @@ public struct TrashcallDashboardView: View {
                 } header: {
                     Text("精准添加自定义规则")
                 } footer: {
-                    Text(selectedAction == .block ? "自动挂断：命中该规则时，iPhone 静默阻断来电不响铃，并在通话记录标明由 Trashcall 阻止。系统会同时写入号码原形式与 86 前缀形式（中国来电常不带 86）。" : "来电识别：完整手机号精确标记；短号段自动补齐到标准位长（如 9521 → 9521****、192804 → 192804*****）。")
+                    Text(selectedAction == .allow ? "输入完整号码。允许来电会覆盖 Trashcall 的挂断规则，并保留已有识别标签。" : "短号段会补齐通配符，例如 9521 → 9521****。通配符只可放在末尾。")
                         .font(.caption2)
                 }
 
-                // 6. 自定义规则列表
+                // 6. iCloud 自定义规则云同步（用户专属私有库）
+                Section {
+                    HStack {
+                        Label("iCloud 账户状态", systemImage: "icloud.fill")
+                            .foregroundColor(.blue)
+                        Spacer()
+                        Text(iCloudAccountStatusText)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        Text("上次云端同步")
+                        Spacer()
+                        Text(lastICloudSyncText)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Button {
+                        Task { await performICloudSync(showNotice: true) }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if isSyncingICloud {
+                                ProgressView().padding(.trailing, 8)
+                                Text("正在与 iCloud 私有库同步...")
+                            } else {
+                                Label("立即同步 iCloud 规则", systemImage: "arrow.triangle.2.circlepath.icloud")
+                            }
+                            Spacer()
+                        }
+                    }
+                    .disabled(isSyncingICloud || isSyncing)
+                } header: {
+                    Text("iCloud 规则云同步（独立私有库）")
+                } footer: {
+                    Text("支持 CloudKit 的签名可将自定义规则同步到当前 Apple ID 的 iCloud 私有数据库。")
+                        .font(.caption2)
+                }
+
+                // 7. 自定义规则列表
                 Section("自定义规则 (\(activeRules.count))") {
                     if activeRules.isEmpty {
                         Text("还没有自定义规则。")
@@ -417,17 +491,17 @@ public struct TrashcallDashboardView: View {
                                         .font(.headline)
                                         .monospaced()
                                     HStack(spacing: 6) {
-                                        Text(rule.action == .block ? "🚫 自动挂断" : "🏷️ \(rule.label ?? "自定义标记")")
+                                        Text(rule.action == .identify ? "🏷️ \(rule.label ?? "自定义标记")" : rule.action.rawValue)
                                             .foregroundColor(rule.action == .block ? .red : .primary)
                                         Text("·")
                                         Text("\(rule.count) 个号码")
                                     }
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
-                                    if liveRuleIDs.contains(rule.id) {
-                                        Text("已写入系统底层库")
+                                    if (try? RuleExpander().estimateCount(rule.pattern)) == nil {
+                                        Text("旧号段格式无效，请删除后重新添加")
                                             .font(.caption2)
-                                            .foregroundColor(.green)
+                                            .foregroundColor(.orange)
                                     }
                                 }
                                 Spacer()
@@ -439,7 +513,7 @@ public struct TrashcallDashboardView: View {
 
                 // 7. 云端数据库自动更新
                 Section {
-                    Toggle("每日自动更新云端数据库", isOn: $autoUpdateEnabled)
+                    Toggle("启动或返回前台时检查官方规则", isOn: $autoUpdateEnabled)
                         .onChange(of: autoUpdateEnabled) { _, newValue in
                             if let store = getStore(readOnly: false) {
                                 try? DatabaseUpdateService.shared.setAutoUpdateEnabled(newValue, in: store)
@@ -447,7 +521,7 @@ public struct TrashcallDashboardView: View {
                         }
 
                     HStack {
-                        Text("云端最新规则版本")
+                        Text("本机官方规则版本")
                         Spacer()
                         Text(cloudVersion)
                             .font(.caption.monospaced())
@@ -477,10 +551,14 @@ public struct TrashcallDashboardView: View {
                         }
                     }
                     .disabled(isCheckingUpdate || isSyncing)
+                    if cloudVersion != "—" {
+                        Button("回滚官方规则", role: .destructive) { confirmOfficialRollback = true }
+                            .disabled(isCheckingUpdate || isSyncing)
+                    }
                 } header: {
                     Text("云端数据库更新")
                 } footer: {
-                    Text("数据源自部署于腾讯云的实时防御规则库 (agentslee.online)，开启后在 App 启动与进入前台时自动增量同步最新高危号码段。")
+                    Text("回滚会恢复上一版官方规则。没有上一版时仅卸载当前官方规则，本地规则和预设策略仍然保留。")
                         .font(.caption2)
                 }
 
@@ -491,9 +569,15 @@ public struct TrashcallDashboardView: View {
                             HStack {
                                 Text("App Group 状态")
                                 Spacer()
-                                Text(appGroupReady ? "已接通 (group.com.trashcall.shared)" : "未接通")
+                                Text(appGroupReady ? "已接通 (\(DatabaseBootstrap.appGroupId))" : "未接通 (已启用离线备用库)")
                                     .font(.caption)
-                                    .foregroundColor(appGroupReady ? .green : .red)
+                                    .foregroundColor(appGroupReady ? .green : .orange)
+                            }
+
+                            if !appGroupReady {
+                                Text("说明：使用全能签免费个人证书签名时 App Group 未授权属正常现象。来电识别与挂断已自动回退至内置离线库保护（41万条云端号库）。若需在 App 内实时修改自定义黑名单并热同步至系统拦截，建议开通含 App Group 权限的证书。")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
 
                             if let run = lastExtensionRun {
@@ -553,7 +637,7 @@ public struct TrashcallDashboardView: View {
                             } label: {
                                 HStack {
                                     Spacer()
-                                    if isSyncing {
+                                    if isSyncing || extensionReload != nil {
                                         ProgressView().padding(.trailing, 8)
                                         Text("正在同步底层数据库...")
                                     } else {
@@ -562,17 +646,14 @@ public struct TrashcallDashboardView: View {
                                     Spacer()
                                 }
                             }
-                            .disabled(isSyncing)
+                            .disabled(isSyncing || extensionReload != nil)
                             .padding(.top, 4)
 
                             Divider()
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("真机拦截生效避坑指南：")
-                                    .font(.caption.weight(.bold))
-                                Text("1. 本机去电记录豁免：若手机曾主动呼叫过测试号，iOS 永久豁免拦截！测试前请在「最近通话」中左滑删除去电记录。")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                Text("2. 通讯录优先：通讯录中的号码享有最高优先级，绝不执行拦截。")
+                                Text("来电验收")
+                                    .font(.caption.weight(.semibold))
+                                Text("从另一台电话呼入，分别核对来电标记和挂断。若签名缺少共享容器，系统扩展只能读取内置识别库。")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
@@ -582,42 +663,45 @@ public struct TrashcallDashboardView: View {
                 }
             }
             .navigationTitle("Trashcall")
+            .confirmationDialog("回滚官方规则？", isPresented: $confirmOfficialRollback, titleVisibility: .visible) {
+                Button("回滚官方规则", role: .destructive) { Task { await rollbackOfficialRules() } }
+            } message: {
+                Text("已回滚的版本可通过手动更新重新应用。")
+            }
             .onChange(of: scenePhase) { _, newPhase in
-                if newPhase == .active {
-                    checkClipboard()
+                if newPhase == .active, appReady {
+                    Task { await refreshStatus() }
                     if autoUpdateEnabled {
                         Task { await performUpdateCheck(force: false) }
                     }
+                    Task { await performICloudSync(showNotice: false) }
                 }
             }
             .task {
                 isSyncing = true
-                await Task.detached(priority: .userInitiated) {
-                    DatabaseBootstrap.run()
-                }.value
-                await refreshStatus()
-                checkClipboard()
-                // 启动时同步：识别与挂断两个扩展都重载（各自仅在已启用时执行）
                 do {
-                    try await Task.sleep(for: .milliseconds(300))
-                    let startupErrors = await reloadEnabledExtensions()
-                    await refreshStatus()
-                    if let first = startupErrors.first(where: { !manager.isCurrentlyLoading($0) }) {
-                        let nsErr = first as NSError
-                        errorMessage = "启动时系统重载失败 [错误码 \(nsErr.code)]：\(first.localizedDescription)"
-                    }
+                    try await Task.detached(priority: .userInitiated) {
+                        try DatabaseBootstrap.prepareDatabase()
+                    }.value
                 } catch {
-                    if !(error is CancellationError) {
-                        let nsErr = error as NSError
-                        errorMessage = "启动时系统重载失败 [错误码 \(nsErr.code)]：\(error.localizedDescription)"
-                    }
+                    errorMessage = "初始化本地规则失败：\(error.localizedDescription)"
+                    isSyncing = false
+                    return
                 }
+                await refreshStatus()
                 isSyncing = false
+                appReady = true
 
-                // 启动完成后静默检查云端更新
+                if needsActivation {
+                    _ = await reloadEnabledExtensions()
+                    await refreshStatus()
+                }
+
+                // 启动完成后静默检查云端更新与 iCloud 同步
                 if autoUpdateEnabled {
                     await performUpdateCheck(force: false)
                 }
+                await performICloudSync(showNotice: false)
             }
         }
     }
@@ -629,6 +713,7 @@ public struct TrashcallDashboardView: View {
         do {
             let count = try RuleExpander().estimateCount(resolved)
             if resolved.contains("*") || resolved.contains("?") {
+                if selectedAction == .allow { return "允许来电需要输入完整号码。" }
                 if resolved != raw {
                     return "将按号段 \(resolved) 写入，约 \(count) 个号码"
                 }
@@ -658,22 +743,26 @@ public struct TrashcallDashboardView: View {
     }
 
     private var protectionTitle: String {
-        if bothExtensionsEnabled { return "系统全能防护中" }
+        if bothExtensionsEnabled { return needsActivation ? "规则已保存，等待系统加载" : "系统已加载当前规则" }
         if extensionStatus == .enabled { return "挂断扩展未开启" }
+        if blockingStatus == .enabled { return "识别扩展未开启" }
         return "未开启系统授权"
     }
 
     private var protectionSubtitle: String {
-        if bothExtensionsEnabled { return "「识别」与「挂断」扩展均已接入 iOS CallKit" }
+        if bothExtensionsEnabled { return "识别与挂断扩展均已开启" }
         if extensionStatus == .enabled {
-            return "请在系统设置中再开启「Trashcall 挂断」开关，自动挂断才会生效"
+            return "已开启识别，请在系统「设置 → 电话 → 来电阻止与身份识别」中开启「Trashcall 挂断」"
         }
-        return "请在系统设置中开启 Trashcall 的识别与挂断两个扩展开关"
+        if blockingStatus == .enabled {
+            return "已开启挂断，请在系统「设置 → 电话 → 来电阻止与身份识别」中开启「Trashcall 识别」"
+        }
+        return "请前往系统「设置 → 电话 → 来电阻止与身份识别」开启两个开关"
     }
 
     private var statusIcon: String {
         switch (extensionStatus, blockingStatus) {
-        case (.enabled, .enabled): return "checkmark.shield.fill"
+        case (.enabled, .enabled): return needsActivation ? "exclamationmark.shield.fill" : "checkmark.shield.fill"
         case (.enabled, _), (_, .enabled): return "exclamationmark.shield.fill"
         default: return "questionmark.shield"
         }
@@ -681,10 +770,46 @@ public struct TrashcallDashboardView: View {
 
     private var statusColor: Color {
         switch (extensionStatus, blockingStatus) {
-        case (.enabled, .enabled): return .green
+        case (.enabled, .enabled): return needsActivation ? .orange : .green
         case (.enabled, _), (_, .enabled): return .orange
         default: return .gray
         }
+    }
+
+    private var actionTitle: String {
+        switch selectedAction {
+        case .block: "挂断规则"
+        case .identify: "识别规则"
+        case .allow: "允许来电规则"
+        }
+    }
+
+    private var needsActivation: Bool {
+        guard appGroupReady else { return true }
+        return [(manager, extensionStatus, lastExtensionRun), (blockingManager, blockingStatus, lastBlockRun)]
+            .contains { service, status, report in
+                status == .enabled && !activationState(service, status: status, report: report).isLoaded
+            }
+    }
+
+    private func activationState(
+        _ service: CallDirectoryManagerService, status: ExtensionStatus, report: ExtensionRunReport?
+    ) -> DirectoryActivationStatus {
+        DirectoryActivationStatus.resolve(
+            extensionStatus: status, appGroupReady: appGroupReady, revision: directoryRevision,
+            acceptedRevision: acceptedRevisions[service.extensionBundleIdentifier], report: report,
+            reloadError: reloadFailures[service.extensionBundleIdentifier]
+        )
+    }
+
+    private func activationRow(
+        _ title: String, manager service: CallDirectoryManagerService,
+        status: ExtensionStatus, report: ExtensionRunReport?
+    ) -> some View {
+        let state = activationState(service, status: status, report: report)
+        let inProgress = state == .pending && extensionReload != nil
+        return LabeledContent(title, value: inProgress ? "系统正在加载…" : state.message)
+            .font(.caption)
     }
 
     private func getStore(readOnly: Bool = false) -> CallDirectoryStore? {
@@ -702,21 +827,31 @@ public struct TrashcallDashboardView: View {
         extensionStatus = await manager.checkStatus()
         blockingStatus = await blockingManager.checkStatus()
         appGroupReady = DatabaseBootstrap.isUsingAppGroup
-        lastExtensionRun = ExtensionRunReport.load(fileName: ExtensionRunReport.defaultFileName)
-            ?? ExtensionRunReport.load(fileName: ExtensionRunReport.identifyFileName)
-            ?? ExtensionRunReport.load()
+        lastExtensionRun = ExtensionRunReport.load(fileName: ExtensionRunReport.identifyFileName)
         lastBlockRun = ExtensionRunReport.load(fileName: ExtensionRunReport.blockFileName)
 
         if let store = getStore(readOnly: true) {
             blockingCount = store.countBlocking()
             identificationCount = store.countIdentification()
             seedVersion = (try? store.getVersion()) ?? "—"
-            cloudVersion = DatabaseUpdateService.shared.getCloudRulesVersion(in: store) ?? "—"
+            let officialVersion = DatabaseUpdateService.shared.getCloudRulesVersion(in: store) ?? ""
+            cloudVersion = officialVersion.isEmpty ? "—" : officialVersion
+            directoryRevision = try? store.getMetadata(key: "directory_revision")
+            var revisions: [String: String] = [:]
+            for id in [manager.extensionBundleIdentifier, blockingManager.extensionBundleIdentifier] {
+                revisions[id] = try? store.getMetadata(key: CallDirectoryManagerService.acceptedRevisionKey(id))
+            }
+            acceptedRevisions = revisions
             autoUpdateEnabled = DatabaseUpdateService.shared.isAutoUpdateEnabled(in: store)
             if let lastCheck = DatabaseUpdateService.shared.getLastCheckTime(in: store) {
                 lastUpdateCheckText = runTimeText(lastCheck.timeIntervalSince1970)
             } else {
                 lastUpdateCheckText = "尚未检查"
+            }
+            if let lastSync = CloudKitSyncService.shared.getLastSyncTime(in: store) {
+                lastICloudSyncText = runTimeText(lastSync.timeIntervalSince1970)
+            } else {
+                lastICloudSyncText = "尚未同步"
             }
 
             var strategies: [ProtectionStrategy: Bool] = [:]
@@ -725,28 +860,12 @@ public struct TrashcallDashboardView: View {
             }
             strategyStates = strategies
 
-            if let persistedRules = try? store.getUserRules() {
-                activeRules = persistedRules
-                var live: Set<UUID> = []
-                for rule in persistedRules {
-                    if rule.pattern.contains("*") || rule.pattern.contains("?") { continue }
-                    let entries = PhoneNumber.callKitEntries(rule.pattern)
-                    if rule.action == .block {
-                        if entries.contains(where: { store.containsBlocking($0.rawValue) }) {
-                            live.insert(rule.id)
-                        }
-                    } else {
-                        if entries.contains(where: { store.containsIdentification($0.rawValue) }) {
-                            live.insert(rule.id)
-                        }
-                    }
-                }
-                liveRuleIDs = live
-            }
+            if let persistedRules = try? store.getUserRules() { activeRules = persistedRules }
         }
     }
 
     private func performUpdateCheck(force: Bool) async {
+        guard !isCheckingUpdate, !isSyncing else { return }
         isCheckingUpdate = true
         if force {
             errorMessage = nil
@@ -766,7 +885,11 @@ public struct TrashcallDashboardView: View {
                 successNotice = "云端数据库已是最新版本 (\(version))。"
             }
         case .updated(let version, let blocking, let ident):
-            successNotice = "云端更新成功！已同步至 \(version)（新增挂断 \(blocking) 条，识别 \(ident) 条）。"
+            successNotice = "已保存官方规则 \(version)（挂断 \(blocking) 条，识别 \(ident) 条）。"
+        case .savedPendingActivation(_, _):
+            errorMessage = result.summaryMessage
+        case .deferred:
+            if force { successNotice = result.summaryMessage }
         case .failed(let reason):
             if force {
                 errorMessage = "检查更新失败: \(reason)"
@@ -775,19 +898,51 @@ public struct TrashcallDashboardView: View {
     }
 
     private func triggerSync() async {
+        guard !isSyncing, extensionReload == nil else { return }
         isSyncing = true
         errorMessage = nil
         successNotice = nil
-        defer { isSyncing = false }
-        await Task.detached(priority: .userInitiated) {
-            DatabaseBootstrap.run()
-        }.value
+        do {
+            try await Task.detached(priority: .userInitiated) {
+                try DatabaseBootstrap.prepareDatabase()
+            }.value
+            appReady = true
+        } catch {
+            isSyncing = false
+            errorMessage = "初始化本地规则失败：\(error.localizedDescription)"
+            return
+        }
+        isSyncing = false
         let errors = await reloadEnabledExtensions()
         await refreshStatus()
-        if errors.isEmpty {
-            successNotice = "数据库已同步，识别与挂断扩展均已成功重载。"
-        } else {
+        if !errors.isEmpty {
             errorMessage = "重载扩展失败: \(errors.map(\.localizedDescription).joined(separator: "；"))"
+        } else if !bothExtensionsEnabled {
+            if extensionStatus != .enabled && blockingStatus != .enabled {
+                successNotice = "数据库已就绪。请在系统「设置 → 电话 → 来电阻止与身份识别」中开启「Trashcall 识别」与「Trashcall 挂断」开关。"
+            } else {
+                successNotice = "数据库已同步并重载已开启的扩展。提示：另一个扩展开关尚未在系统设置中开启。"
+            }
+        } else {
+            successNotice = "数据库已同步，识别与挂断扩展均已成功重载。"
+        }
+    }
+
+    private func rollbackOfficialRules() async {
+        isSyncing = true
+        defer { isSyncing = false }
+        do {
+            let url = DatabaseBootstrap.databaseURL()
+            let version = try await Task.detached(priority: .userInitiated) {
+                let store = CallDirectoryStore(databaseURL: url)
+                try store.open()
+                try store.initializeSchema()
+                return try store.rollbackOfficialRules()
+            }.value
+            let message = version.isEmpty ? "已卸载当前官方规则。" : "已恢复官方规则 \(version)。"
+            finishChangeAfterStoreWrite(successMessage: message)
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -797,74 +952,45 @@ public struct TrashcallDashboardView: View {
         isSyncing = true
         defer { isSyncing = false }
 
-        let expander = RuleExpander()
-        let resolved = PatternInput.resolved(customRulePattern)
+        let pattern = PatternInput.resolved(customRulePattern)
+        let action = selectedAction
+        let label = action == .identify ? identifyLabel : nil
+        let title = actionTitle
+        let url = DatabaseBootstrap.databaseURL()
         do {
-            let phoneNumbers = try expander.expandWildcard(resolved).map(\.rawValue)
-            guard !phoneNumbers.isEmpty else {
-                errorMessage = "没有可写入的号码。"
-                return
-            }
-            guard let store = getStore(readOnly: false) else {
-                errorMessage = "无法连接离线数据库"
-                return
-            }
-            let newRule = ActiveRuleItem(
-                pattern: resolved,
-                action: selectedAction,
-                label: selectedAction == .block ? nil : identifyLabel,
-                count: phoneNumbers.count
-            )
-            try store.addUserRule(newRule, numbers: phoneNumbers)
-            withAnimation {
-                activeRules.insert(newRule, at: 0)
-            }
+            let saved = try await Task.detached(priority: .userInitiated) {
+                let store = CallDirectoryStore(databaseURL: url)
+                try store.open()
+                try store.initializeSchema()
+                return try store.addUserRule(ActiveRuleItem(pattern: pattern, action: action, label: label))
+            }.value
             customRulePattern = ""
-            let actionText = selectedAction == .block ? "自动挂断黑名单" : "来电识别"
-            let notice: String
-            if phoneNumbers.count <= 4 {
-                let preview = phoneNumbers.map { "+\($0)" }.joined(separator: " / ")
-                notice = "已将 \(preview) 写入\(actionText)。"
-            } else {
-                notice = "已将号段 \(resolved)（\(phoneNumbers.count) 个号码）写入\(actionText)。"
-            }
-            // 规则已落库；系统重载失败不应报成“添加失败”
-            await finishChangeAfterStoreWrite(successMessage: notice)
+            finishChangeAfterStoreWrite(successMessage: "已保存\(title) \(saved.pattern)（\(saved.count) 条）。")
+            Task { await performICloudSync() }
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     private func deleteRules(at offsets: IndexSet) {
-        let rulesToDelete = offsets.compactMap { index in
-            index < activeRules.count ? activeRules[index] : nil
-        }
-        guard !rulesToDelete.isEmpty else { return }
-
-        // 立即乐观更新 UI 数组，让 SwiftUI 滑动删除动画瞬间完成无任何粘滞感
-        withAnimation(.easeOut(duration: 0.2)) {
-            activeRules.remove(atOffsets: offsets)
-        }
-
+        let ids = offsets.map { activeRules[$0].id }
+        let url = DatabaseBootstrap.databaseURL()
         Task {
-            guard let store = getStore(readOnly: false) else {
-                errorMessage = "无法连接离线数据库"
+            isSyncing = true
+            defer { isSyncing = false }
+            do {
+                try await Task.detached(priority: .userInitiated) {
+                    let store = CallDirectoryStore(databaseURL: url)
+                    try store.open()
+                    try store.initializeSchema()
+                    try store.deleteUserRules(ids: ids)
+                }.value
+                finishChangeAfterStoreWrite(successMessage: "规则已删除。")
+                Task { await performICloudSync() }
+            } catch {
+                errorMessage = "删除规则失败：\(error.localizedDescription)"
                 await refreshStatus()
-                return
             }
-            let expander = RuleExpander()
-            for rule in rulesToDelete {
-                let numbers = (try? expander.expandWildcard(rule.pattern).map(\.rawValue)) ?? []
-                do {
-                    try store.deleteUserRule(id: rule.id, pattern: rule.pattern, action: rule.action, numbers: numbers)
-                } catch {
-                    errorMessage = "删除规则失败: \(error.localizedDescription)"
-                    await refreshStatus()
-                    return
-                }
-            }
-            // 规则已从本地删除；重载失败只提示，不推翻删除结果
-            await finishChangeAfterStoreWrite(successMessage: "规则已删除。")
         }
     }
 
@@ -888,56 +1014,88 @@ public struct TrashcallDashboardView: View {
             await refreshStatus()
             return
         }
-        await finishChangeAfterStoreWrite(
+        finishChangeAfterStoreWrite(
             successMessage: enabled ? "所有高危号段已切换为「自动挂断」。" : "所有高危号段已恢复为「来电打标」。"
         )
     }
 
-    /// 写库成功后的统一收尾。
-    /// 数据一旦落库即已保存成功；系统重载（reloadExtension）只是把新数据
-    /// 同步进 iOS 底层索引，重载失败不应被报成「策略设置失败」。
-    /// - 同时重载识别与挂断两个已启用的扩展（策略/规则会同时改动两张表）。
-    /// - 系统繁忙（正在加载另一批数据）时，重试由 reloadExtension 内部完成；
-    ///   若最终仍未完成，提示用户稍后手动同步，而不是报错。
-    private func finishChangeAfterStoreWrite(successMessage: String) async {
-        let identificationOn = await manager.checkStatus() == .enabled
-        let blockingOn = await blockingManager.checkStatus() == .enabled
-        guard identificationOn || blockingOn else {
+    /// Publish the saved result immediately. System activation has its own status.
+    private func finishChangeAfterStoreWrite(successMessage: String) {
+        successNotice = successMessage
+        Task {
             await refreshStatus()
-            successNotice = successMessage + "（提示：扩展开关尚未在系统设置中开启，开启后将自动生效。）"
-            return
-        }
-        let errors = await reloadEnabledExtensions()
-        await refreshStatus()
-        if errors.isEmpty {
-            successNotice = successMessage
-        } else if errors.allSatisfy({ manager.isCurrentlyLoading($0) }) {
-            successNotice = successMessage + "（系统正在后台加载，稍后可在高级设置中点「重新同步全量数据库」确保立即生效。）"
-        } else {
-            errorMessage = "设置已保存，但部分系统重载失败：\(errors.map(\.localizedDescription).joined(separator: "；"))"
+            if needsActivation {
+                _ = await reloadEnabledExtensions()
+                await refreshStatus()
+            }
         }
     }
 
-    // MARK: - 剪贴板感知与处理
+    // MARK: - iCloud 云同步操作
 
-    private func checkClipboard() {
-        #if canImport(UIKit)
-        guard UIPasteboard.general.hasStrings else { return }
-        guard let raw = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return }
-        guard raw != lastProcessedClipboard else { return }
+    private func updateICloudStatus() async {
+        let status = await CloudKitSyncService.shared.getAccountStatus()
+        await MainActor.run {
+            self.iCloudAccountStatusText = status.description
+            if let store = getStore(readOnly: true),
+               let lastSync = CloudKitSyncService.shared.getLastSyncTime(in: store) {
+                self.lastICloudSyncText = runTimeText(lastSync.timeIntervalSince1970)
+            }
+        }
+    }
 
-        // 过滤非数字与+符号
-        let digitsOnly = raw.filter { $0.isNumber || $0 == "+" }
-        guard digitsOnly.count >= 3 && digitsOnly.count <= 18 else { return }
+    private func performICloudSync(showNotice: Bool = false) async {
+        if isSyncingICloud {
+            iCloudSyncQueued = true
+            return
+        }
+        isSyncingICloud = true
+        defer { isSyncingICloud = false }
+        repeat {
+            iCloudSyncQueued = false
+            await syncICloudRules(showNotice: showNotice)
+        } while iCloudSyncQueued && !Task.isCancelled
+    }
 
-        // 确保不包含字母（避免复制大段文字误触发）
-        let totalLetters = raw.filter { $0.isLetter }.count
-        guard totalLetters == 0 else { return }
+    private func syncICloudRules(showNotice: Bool) async {
+        guard let store = getStore(readOnly: false) else {
+            if showNotice { errorMessage = "无法打开本地规则库。" }
+            return
+        }
+        let before = try? store.getMetadata(key: "directory_revision")
+        let result = await CloudKitSyncService.shared.sync(store: store)
+        let after = try? store.getMetadata(key: "directory_revision")
 
+        if showNotice {
+            if result.isSuccess {
+                successNotice = result.summaryMessage
+            } else {
+                errorMessage = result.summaryMessage
+            }
+        }
+
+        if before != after {
+            let errors = await reloadEnabledExtensions()
+            if !errors.isEmpty {
+                errorMessage = "iCloud 规则已保存，系统加载失败：\(errors.map(\.localizedDescription).joined(separator: "；"))"
+            }
+        }
+        await refreshStatus()
+        await updateICloudStatus()
+    }
+
+    // MARK: - 主动粘贴号码
+
+    private func usePastedNumber(_ value: String) {
+        let raw = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard PatternInput.hasSupportedCharacters(raw), !raw.isEmpty else {
+            errorMessage = "剪贴板里的内容不是有效的号码或号段。"
+            return
+        }
         withAnimation {
             detectedClipboardNumber = raw
+            customRulePattern = raw
         }
-        #endif
     }
 
     private func addQuickClipboardRule(_ number: String, action: RuleActionType) async {
@@ -948,7 +1106,6 @@ public struct TrashcallDashboardView: View {
         }
         await addRule()
         withAnimation {
-            lastProcessedClipboard = number
             detectedClipboardNumber = nil
         }
     }
@@ -973,7 +1130,7 @@ public struct TrashcallDashboardView: View {
             await refreshStatus()
             return
         }
-        await finishChangeAfterStoreWrite(
+        finishChangeAfterStoreWrite(
             successMessage: "\(strategy.title) 已\(enabled ? "开启自动挂断" : "恢复为来电识别")。"
         )
     }
