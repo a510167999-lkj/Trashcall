@@ -2,11 +2,41 @@ import Foundation
 
 /// Copies the bundled identification seed and applies versioned updates without wiping user rules.
 public enum DatabaseBootstrap: Sendable {
-    public static let appGroupId = "group.com.trashcall.shared"
+    public static let preferredAppGroupId = "group.0294e79a001ad3e1.1"
     public static let databaseFileName = "trashcall.sqlite"
 
+    /// App Group actually usable by this signed process. 全能签 often replaces
+    /// `group.com.trashcall.shared`; if the resigner keeps one shared group on
+    /// the app and both extensions, this still finds the live container.
+    public static var appGroupId: String { resolvedAppGroupId }
+
+    private static let resolvedAppGroupId: String = {
+        let signed = SignedEntitlements.values(for: "com.apple.security.application-groups")
+        var candidates: [String] = []
+        for id in [preferredAppGroupId, "group.com.trashcall.shared"] + signed where !candidates.contains(id) {
+            candidates.append(id)
+        }
+        for id in candidates {
+            if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id) != nil {
+                return id
+            }
+        }
+        return signed.first ?? preferredAppGroupId
+    }()
+
     public static func run() {
-        setupDatabase(at: databaseURL())
+        do { try prepareDatabase() }
+        catch { print("Failed to initialize database: \(error.localizedDescription)") }
+    }
+
+    public static func prepareDatabase(
+        at url: URL = databaseURL(), bundledSeed seedURL: URL? = bundledSeedURL()
+    ) throws {
+        let store = CallDirectoryStore(databaseURL: url)
+        try store.open()
+        defer { store.close() }
+        try store.initializeSchema()
+        if let seedURL { try applyBundledSeed(seedURL, to: store) }
     }
 
     public static var isUsingAppGroup: Bool {
@@ -28,133 +58,72 @@ public enum DatabaseBootstrap: Sendable {
 
     public static func databaseURL() -> URL {
         let url = supportDirectory().appendingPathComponent(databaseFileName)
-        migrateLegacyRootDatabaseIfNeeded(to: url)
-        return url
+        return migrateLegacyRootDatabaseIfNeeded(to: url)
     }
 
     public static func bundledSeedURL() -> URL? {
-        Bundle.main.url(forResource: "seed_database", withExtension: "sqlite")
+        if let url = Bundle.main.url(forResource: "seed_database", withExtension: "sqlite") {
+            return url
+        }
+        let parentBundleURL = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent()
+        if let parentBundle = Bundle(url: parentBundleURL),
+           let url = parentBundle.url(forResource: "seed_database", withExtension: "sqlite") {
+            return url
+        }
+        let directURL = parentBundleURL.appendingPathComponent("seed_database.sqlite")
+        if FileManager.default.fileExists(atPath: directURL.path) {
+            return directURL
+        }
+        let repoSeed = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("App/Resources/seed_database.sqlite")
+        if FileManager.default.fileExists(atPath: repoSeed.path) {
+            return repoSeed
+        }
+        let cwdSeed = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("App/Resources/seed_database.sqlite")
+        if FileManager.default.fileExists(atPath: cwdSeed.path) {
+            return cwdSeed
+        }
+        return nil
     }
 
-    private static func migrateLegacyRootDatabaseIfNeeded(to newURL: URL) {
+    private static func migrateLegacyRootDatabaseIfNeeded(to newURL: URL) -> URL {
         guard let groupURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupId
-        ) else { return }
+        ) else { return newURL }
         let fm = FileManager.default
         let oldURL = groupURL.appendingPathComponent(databaseFileName)
-        guard fm.fileExists(atPath: oldURL.path) else { return }
-        if !fm.fileExists(atPath: newURL.path) {
-            try? fm.moveItem(at: oldURL, to: newURL)
-        }
-        for suffix in ["-wal", "-shm"] {
-            let oldSide = URL(fileURLWithPath: oldURL.path + suffix)
-            let newSide = URL(fileURLWithPath: newURL.path + suffix)
-            if fm.fileExists(atPath: oldSide.path), !fm.fileExists(atPath: newSide.path) {
-                try? fm.moveItem(at: oldSide, to: newSide)
-            } else {
-                try? fm.removeItem(at: oldSide)
-            }
-        }
-        if fm.fileExists(atPath: newURL.path) {
-            try? fm.removeItem(at: oldURL)
-        }
-    }
-
-    private static func setupDatabase(at url: URL) {
-        let fileManager = FileManager.default
-        if !fileManager.fileExists(atPath: url.path) {
-            removeSidecars(for: url)
-            if let seedURL = bundledSeedURL() {
-                try? fileManager.copyItem(at: seedURL, to: url)
-            }
-        }
-
-        let store = CallDirectoryStore(databaseURL: url)
+        guard fm.fileExists(atPath: oldURL.path), !fm.fileExists(atPath: newURL.path) else { return newURL }
+        let temp = newURL.deletingLastPathComponent().appendingPathComponent(".legacy-\(UUID()).sqlite")
+        defer { try? fm.removeItem(at: temp) }
         do {
-            try store.open()
-            try store.initializeSchema()
-            try applyBundledSeedIfNeeded(to: store)
-            reapplyUserRules(store: store)
+            let legacy = CallDirectoryStore(databaseURL: oldURL)
+            try legacy.open(readOnly: true)
+            defer { legacy.close() }
+            let path = temp.path.replacingOccurrences(of: "'", with: "''")
+            try legacy.execute(sql: "VACUUM INTO '\(path)';")
+            try fm.moveItem(at: temp, to: newURL)
         } catch {
-            print("Failed to initialize database: \(error.localizedDescription)")
+            if !fm.fileExists(atPath: newURL.path) {
+                print("Failed to migrate legacy database: \(error.localizedDescription)")
+                return oldURL
+            }
         }
+        return newURL
     }
 
-    private static func applyBundledSeedIfNeeded(to store: CallDirectoryStore) throws {
-        guard let seedURL = bundledSeedURL() else { return }
+    private static func applyBundledSeed(_ seedURL: URL, to store: CallDirectoryStore) throws {
         let seed = CallDirectoryStore(databaseURL: seedURL)
         try seed.open(readOnly: true)
         defer { seed.close() }
 
-        let seedVersion = (try? seed.getVersion()) ?? "unknown"
-        let liveVersion = (try? store.getVersion()) ?? ""
-        let seedCount = (try? seed.getMetadata(key: "identification_count")) ?? ""
-        let liveCount = (try? store.getMetadata(key: "identification_count")) ?? ""
-        let needsImport = seedVersion != liveVersion || seedCount != liveCount || (store.countIdentification() == 0 && store.countBlocking() == 0)
-        guard needsImport else { return }
-
-        // Clear existing seed identification entries so new categories are cleanly synced
-        try store.execute(sql: "BEGIN EXCLUSIVE TRANSACTION;")
-        do {
-            try store.execute(sql: "DELETE FROM identification_numbers;")
-            var buffer: [IdentificationEntry] = []
-            buffer.reserveCapacity(5000)
-            try seed.streamIdentificationEntries { entry in
-                buffer.append(entry)
-                if buffer.count >= 5000 {
-                    try store.insertIdentificationBatch(buffer)
-                    buffer.removeAll(keepingCapacity: true)
-                }
-            }
-            if !buffer.isEmpty {
-                try store.insertIdentificationBatch(buffer)
-                buffer.removeAll()
-            }
-            try store.execute(sql: "COMMIT TRANSACTION;")
-            store.checkpoint()
-        } catch {
-            try? store.execute(sql: "ROLLBACK TRANSACTION;")
-            throw error
-        }
-
-        try store.setMetadata(key: "version", value: seedVersion)
-        if !seedCount.isEmpty {
-            try store.setMetadata(key: "identification_count", value: seedCount)
-        }
-
-        // Re-apply any enabled strategies
-        for strategy in ProtectionStrategy.allCases {
-            if store.isStrategyEnabled(strategy) {
-                try? store.setStrategy(strategy, enabled: true)
-            }
-        }
-
-        // The seed import above can re-add numbers the user explicitly blocked.
-        // Blocking and identification must stay mutually exclusive: a number present
-        // in both tables produces a mixed duplicate entry, which iOS 26/27 handles
-        // by dropping the blocking entry (call still rings). Remove the overlap.
-        try? store.execute(sql: """
-        DELETE FROM identification_numbers
-        WHERE phone_number IN (SELECT phone_number FROM blocking_numbers);
-        """)
-        store.checkpoint()
-
-        reapplyUserRules(store: store)
+        let version = try seed.getVersion() ?? "unknown"
+        let count = try seed.getMetadata(key: "identification_count") ?? ""
+        try store.installBundledSeed(seed, version: version, count: count)
     }
 
-    private static func reapplyUserRules(store: CallDirectoryStore) {
-        guard let rules = try? store.getUserRules() else { return }
-        let expander = RuleExpander()
-        for rule in rules {
-            let numbers = (try? expander.expandWildcard(rule.pattern).map(\.rawValue)) ?? []
-            guard !numbers.isEmpty else { continue }
-            try? store.addUserRule(rule, numbers: numbers)
-        }
-    }
-
-    private static func removeSidecars(for url: URL) {
-        let fileManager = FileManager.default
-        try? fileManager.removeItem(atPath: url.path + "-wal")
-        try? fileManager.removeItem(atPath: url.path + "-shm")
-    }
 }

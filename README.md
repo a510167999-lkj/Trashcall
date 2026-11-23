@@ -1,141 +1,52 @@
-# Trashcall - iOS 垃圾电话与骚扰拦截系统核心架构
+# Trashcall - iOS 智能垃圾电话拦截与骚扰识别系统
 
-面向现代化 iOS（支持当前最新 iOS 17/18 及未来版本演进）的高性能、隐私零泄露、超低内存开销的电话拦截与号码标记识别核心架构。
-
----
-
-## 🌟 核心设计理念与技术选型
-
-### 1. 开发语言：Swift 6+（Strict Concurrency）
-- **为何不使用跨平台框架（Flutter / React Native）**：
-  iOS 拦截扩展（`CXCallDirectoryProvider`）运行于独立沙盒进程中，系统对其施加了极其严苛的物理内存限制（**通常上限仅 15MB ~ 30MB**，超时 30 秒）。跨平台引擎启动时的基础开销即会直接触发系统 `SIGKILL` 强退。
-- **为何选择 Swift 6**：
-  - Apple 系统级一等公民，零 FFI 开销直调 CallKit / IdentityLookup。
-  - 基于 ARC 的无 GC 确定性内存分配，内存可精确控制在 1MB 以内。
-  - Swift 6 编译期线程安全模型（Strict Concurrency / Actors），杜绝跨进程与多线程数据竞争。
-
-### 2. iOS 隐私与“盲拦截”机制
-在 iOS 中，**主叫号码绝对不会暴露给第三方 App 或 Extension**。
-1. App 必须通过 `App Group` 将号码预先存储为升序索引。
-2. 通过 `CXCallDirectoryProvider` 将号码批量流式注册进 iOS 系统底层索引库。
-3. 来电时，由 iOS 系统电话进程（`In-Call Service`）自行完成拦截与打标展示，保障用户隐私绝对安全。
+Trashcall 是一款面向现代化 iOS 平台（支持 iOS 17 / 18 及更高版本）的使用 iOS Call Directory 扩展的来电拦截与号码识别应用。
 
 ---
 
-## 📁 模块分层与工程结构
+## 🌟 核心功能特性
 
-```text
-Trashcall/
-├── Package.swift
-├── Sources/
-│   ├── Trashcall/
-│   │   ├── Models/
-│   │   │   ├── PhoneNumber.swift           # E.164 号码清洗、校验与 Int64 映射
-│   │   │   ├── CallRule.swift              # 黑名单、标记规则、号段模式定义
-│   │   │   └── DeltaPackage.swift          # 增量差分补丁数据模型
-│   │   ├── Engine/
-│   │   │   ├── RuleExpander.swift          # 通配符 (如 9521****) 安全受控展开器
-│   │   │   ├── SortedSequenceValidator.swift # CallKit 严格单调升序检查与排重
-│   │   │   └── IncrementalEngine.swift     # 增量变更 (Add/Remove) 计算引擎
-│   │   ├── Storage/
-│   │   │   └── CallDirectoryStore.swift    # 极低内存 SQLite 步进游标流式读写器
-│   │   ├── CallKitBridge/
-│   │   │   ├── CallDirectoryProviderWrapper.swift # 流式注入流水线与测试 Mock
-│   │   │   ├── TrashcallCallDirectoryProvider.swift # CXCallDirectoryProvider 生产子类
-│   │   │   └── CallDirectoryManagerService.swift   # 主 App 扩展状态与重载触发器
-│   │   └── UI/
-│   │       └── TrashcallDashboardView.swift # SwiftUI 状态面板与规则界面
-│   └── TrashcallTestRunner/
-│       └── main.swift                      # 核心算法与端到端流式验证测试套件
-```
+### 1. 🛡️ 双扩展独立防御引擎（可靠挂断与精准打标）
+- **自动挂断扩展（Block Directory Extension）**：针对高危欺诈、恶意营销、高频电销与违规催收电话，向 iOS 注册需要拦截的号码，由系统处理来电。
+- **来电识别扩展（Identification Directory Extension）**：针对快递配送、外卖订餐、公用政务、银行客服等号码进行精准黄页打标，来电时即时展示身份。
+- **物理架构隔离**：采用独立的双 Extension 架构分别喂送挂断与打标数据，首页分别显示两个扩展对当前本地规则版本的加载状态。
 
----
+### 2. 📴 海量离线特征库与互斥保护
+- **数十万级离线号库**：内置经过清洗与规整的海量防骚扰与机构黄页特征库，无需联网即可提供本地来电识别规则。
+- **严格状态互斥**：同一号码只提交挂断或来电识别中的一种。删除规则或关闭策略后，会恢复其他仍匹配的规则或原始标签。
 
-## 🛠️ 如何在 Xcode 中接入与配置
+### 3. 🎯 智能通配号段与自定义规则
+- **通配符号段覆盖**：支持末尾通配符（例如 `9521****`、`05712801****`）。保存前会显示解析结果和覆盖数量。
+- **智能自动补全**：内置号码模式智能解析器，用户输入号段前缀即可自动识别目标长度并推导掩码，无需手动输入星号。
+- **安全边界与单调递增校验**：内置通配符扩展防溢出保护机制，并在写入系统底层前执行严格单调递增不变量检查，防止扩展异常崩溃。
 
-### 步骤 1：创建两个 Call Directory Extension Target
-1. 打开 Xcode，在项目中选择 `File` -> `New` -> `Target...`。
-2. 选择 **Call Directory Extension**，分别创建两个扩展：
-   - `CallDirectoryExtension`（识别扩展，`feedKind = .identificationOnly`，只提交来电打标条目）。
-   - `BlockDirectoryExtension`（挂断扩展，`feedKind = .blockingOnly`，只提交自动挂断条目）。
-3. 将项目依赖指向本 `Trashcall` Swift Package。
+### 4. 🔒 来电匹配与数据使用
+- **系统匹配**：App 向系统扩展提供号码规则。App 不请求通讯录权限，也不读取通话记录或实时来电号码。
+- **同步范围**：公共库更新下载官方号码。签名启用 CloudKit 后，自定义规则可上传到用户的 iCloud 私有数据库。
 
-> ⚠️ **为什么必须拆成两个扩展**：iOS 26/27 会丢弃同一请求中与打标条目混提的 `addBlockingEntry`，
-> 表现为"加入自动挂断的号码来电仍然正常打入，而打标一切正常"。两个扩展各自提交同质请求即可规避，
-> 且挂断索引体积小、重载快，不受 41 万条打标库影响。
+### 5. ⚡ 极致性能与超低内存消耗
+- **纯原生 Swift 6 架构**：完全采用 Swift 6+ 严格并发（Strict Concurrency）与 Actors 模型开发，零第三方商业引擎负担。
+- **SQLite 游标流式喂入**：采用底层轻量级 SQLite 步进游标流式注入，扩展按升序从 SQLite 逐条读取规则。
 
-### 步骤 2：配置 App Groups 共享容器
-由于主 App 与 Extension 位于不同沙盒中，必须开启 App Group 实现数据共享：
-1. 在主 App Target 的 `Signing & Capabilities` 中添加 **App Groups**，例如 `group.com.yourcompany.trashcall`。
-2. 在 `CallDirectoryExtension` 与 `BlockDirectoryExtension` 两个 Target 的 `Signing & Capabilities` 中添加完全相同的 App Group 标识符。
+### 6. 🔄 官方规则更新与回滚
+- 更新完整快照时会移除官方库已撤回的号码，保留预设策略及自定义规则。可在「云端数据库更新」中回滚上一版。
+- 缺少核验标记的旧官方规则默认用于识别。发布配置中只有显式列入 `verified_blocking_patterns` 或 `verified_blocking_numbers` 的条目进入挂断列表。
+- 用户可以为完整号码添加「允许来电」规则，覆盖 Trashcall 的挂断规则并保留已有识别标签。
 
-### 步骤 3：实现 CallDirectoryHandler
-在 Extension Target 中，直接继承 `TrashcallCallDirectoryProvider`：
+### 7. ☁️ iCloud 自定义规则同步
+- **基于 CloudKit 私有数据库**：用户添加的自定义拦截规则、号段模式和黑名单，在应用签名包含 `iCloud.com.trashcall.app` 容器和 CloudKit 服务权限时，可在登录相同 Apple ID 的 iPhone 之间同步。
+- **墓碑追踪与冲突调解**：按修改时间合并同一规则，并保留删除记录，避免离线旧规则被重新加入。
 
-```swift
-import Trashcall
+### 8. 📱 Siri 与快捷指令（App Shortcuts）深度集成
+- **系统级快捷操作**：原生接入 iOS App Intents / Shortcuts 框架，支持将可疑号码一键加入 Trashcall 黑名单。
+- **自动化工作流**：可配合 iOS 快捷指令自动化（如收到骚扰短信、定时触发等）实现灵活防御策略。
 
-final class CallDirectoryHandler: TrashcallCallDirectoryProvider {
-    override var appGroupIdentifier: String {
-        return "group.com.yourcompany.trashcall"
-    }
+### 9. 🍃 纯净无扰与合规保障
+- **零商业广告与零追踪**：全工程无任何商业广告 SDK、无用户行为追踪 SDK，无开屏等待。
+- **官方隐私清单合规**：完整集成 Apple 官方标准隐私清单（`PrivacyInfo.xcprivacy`），符合 App Store 隐私合规规范。
 
-    override var databaseFileName: String {
-        return "trashcall.sqlite"
-    }
-}
-```
+## 开发验证
 
-### 步骤 4：主 App 写入号码并触发重载
-在主 App 中，使用 `CallDirectoryStore` 写入号码，并通知系统更新：
-
-```swift
-import Trashcall
-
-guard let groupURL = FileManager.default.containerURL(
-    forSecurityApplicationGroupIdentifier: "group.com.yourcompany.trashcall"
-) else { return }
-
-let dbURL = groupURL.appendingPathComponent("trashcall.sqlite")
-let store = CallDirectoryStore(databaseURL: dbURL)
-try store.open()
-try store.initializeSchema()
-
-// 批量写入全量或增量号码（百万级别写入仅需数百毫秒）
-try store.replaceAll(
-    blocking: [8613800000001, 8613800000002],
-    identifications: [IdentificationEntry(phoneNumber: 8695210000, label: "推销电话")],
-    version: "2026.09.09"
-)
-
-// 通知 CallKit 在后台唤醒扩展并完成注册（识别与挂断两个扩展都需要重载）
-let manager = CallDirectoryManagerService(extensionBundleIdentifier: "com.yourcompany.trashcall.CallDirectoryExtension")
-try await manager.reloadExtension()
-let blockManager = CallDirectoryManagerService(extensionBundleIdentifier: "com.yourcompany.trashcall.BlockDirectoryExtension")
-try await blockManager.reloadExtension()
-```
-
----
-
-## 🧪 运行核心验证测试
-
-本地已集成自研验证套件，覆盖 E.164 格式清洗、通配符防溢出保护、单调递增不变量检查、增量差分及 SQLite 游标流式喂入：
-
-```bash
-swift run TrashcallTestRunner
-```
-
-### 输出示例：
-```text
-==================================================
-🚀 Running Trashcall Core Verification Test Suite
-==================================================
-  ✅ PASS: PhoneNumber Normalization (Chinese Mobile & Landline)
-  ✅ PASS: RuleExpander Wildcard & Bound Protection
-  ✅ PASS: SortedSequenceValidator Monotonic Invariants
-  ✅ PASS: IncrementalEngine Diff Calculation
-  ✅ PASS: SQLite Store Batch Writing and Streaming Feeder
-==================================================
-📊 Test Results: 5 passed, 0 failed
-==================================================
-```
+- 运行 `swift run TrashcallTestRunner` 执行离线回归。设置 `TRASHCALL_TEST_LIVE_RULES=1` 可另外检查在线规则地址。
+- 私有识别库可以用 `python3 scripts/merge_local_identification.py <本地号码导出.sqlite> <本地构建目录/seed_database.sqlite>` 生成。将该文件放进独立构建目录的 `App/Resources` 后构建。补充标签只在现有规则没有标签时使用，不参加预设挂断策略。
+- Xcode 构建中主 App 与两个扩展共同使用 `App/TrashcallXcode.entitlements`。旁加载脚本继续使用原有的签名文件。支持 iCloud 的分发版本需为主 App 配置 CloudKit 容器与相应描述文件。

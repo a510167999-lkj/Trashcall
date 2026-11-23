@@ -33,12 +33,11 @@ jobs:
           import sqlite3
           db="App/Resources/seed_database.sqlite"
           c=sqlite3.connect(db)
-          omitted=(18964046784, 8618964046784)
-          n=c.execute("SELECT COUNT(*) FROM identification_numbers WHERE phone_number IN (?,?)", omitted).fetchone()[0]
           b=c.execute("SELECT COUNT(*) FROM blocking_numbers").fetchone()[0]
-          if n or b:
-              raise SystemExit(f"seed integrity failed default_omission={n} blocking={b}")
-          print("seed integrity ok", c.execute("SELECT COUNT(*) FROM identification_numbers").fetchone()[0])
+          ident_count=c.execute("SELECT COUNT(*) FROM identification_numbers").fetchone()[0]
+          if b > 0 or ident_count == 0:
+              raise SystemExit(f"seed integrity failed: blocking={b} ident_count={ident_count}")
+          print(f"seed integrity ok: {ident_count} identification numbers")
           PY
 
       - name: Commit and Push if Changed

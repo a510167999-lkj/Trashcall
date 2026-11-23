@@ -25,7 +25,8 @@ public struct PhoneNumber: Hashable, Comparable, Sendable, CustomStringConvertib
     /// - Returns: A normalized `PhoneNumber` instance, or `nil` if invalid.
     public static func normalize(_ input: String, defaultCountryCode: Int = 86) -> PhoneNumber? {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        guard !trimmed.isEmpty, PatternInput.hasSupportedCharacters(trimmed, allowWildcards: false),
+              !trimmed.dropFirst().contains("+") else { return nil }
 
         // Determine whether user explicitly provided international format (+ or 00)
         var hasInternationalPrefix = false
@@ -53,7 +54,10 @@ public struct PhoneNumber: Hashable, Comparable, Sendable, CustomStringConvertib
 
         var finalDigits = cleanedDigits
 
-        if !hasInternationalPrefix {
+        let countryCode = String(defaultCountryCode)
+        let hasBareChinaCode = defaultCountryCode == 86 && cleanedDigits.hasPrefix(countryCode)
+            && PatternInput.isCompleteNumber(cleanedDigits)
+        if !hasInternationalPrefix && !hasBareChinaCode {
             // If it starts with domestic trunk prefix '0' (e.g., Chinese landline 010, 021, 0755), strip the leading 0
             if finalDigits.hasPrefix("0") && finalDigits.count > 3 {
                 finalDigits.removeFirst()
@@ -75,7 +79,7 @@ public struct PhoneNumber: Hashable, Comparable, Sendable, CustomStringConvertib
 
     /// CallKit matches the digit string the carrier presents, not a conceptual E.164 value.
     /// Chinese mobiles are often presented without the `86` prefix, so an exact number is
-    /// registered as both E.164 (`8618964046784`) and the national form (`18964046784`).
+    /// registered as both E.164 (`8618900000000`) and the national form (`18900000000`).
     public static func callKitEntries(_ input: String, defaultCountryCode: Int = 86) -> [PhoneNumber] {
         guard let e164 = normalize(input, defaultCountryCode: defaultCountryCode) else { return [] }
         var values: [Int64] = [e164.rawValue]

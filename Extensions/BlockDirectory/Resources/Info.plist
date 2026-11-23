@@ -19,15 +19,15 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.2</string>
+    <string>1.1.4</string>
     <key>CFBundleVersion</key>
-    <string>11</string>
+    <string>16</string>
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionPointIdentifier</key>
         <string>com.apple.callkit.call-directory</string>
         <key>NSExtensionPrincipalClass</key>
-        <string>TrashcallBlockDirectory.CallDirectoryBlockHandler</string>
+        <string>CallDirectoryBlockHandler</string>
     </dict>
 </dict>
 </plist>

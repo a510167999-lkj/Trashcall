@@ -18,9 +18,18 @@ VCARDS_REPO = "https://github.com/metowolf/vCards.git"
 CLONE_DIR = "/tmp/vCards_cache"
 OUTPUT_DB = os.path.abspath(os.path.join(os.path.dirname(__file__), "../App/Resources/seed_database.sqlite"))
 SEED_VERSION = datetime.now(timezone.utc).strftime("%Y.%m.%d.%H%M%S.v3_410k")
-# Omitted from the default seed only. Users may add these numbers in-app;
-# a seed may include them if they are explicitly sourced.
-DEFAULT_SEED_OMISSIONS = {18964046784, 8618964046784}
+# Omitted from the default seed only. Configurable via TRASHCALL_OMISSIONS env.
+def load_seed_omissions():
+    omissions = set()
+    env_val = os.environ.get("TRASHCALL_OMISSIONS", "")
+    if env_val:
+        for item in env_val.split(","):
+            digits = "".join(c for c in item if c.isdigit())
+            if digits:
+                omissions.add(int(digits))
+    return omissions
+
+DEFAULT_SEED_OMISSIONS = load_seed_omissions()
 
 
 def normalize_phone(raw_str, default_cc="86"):

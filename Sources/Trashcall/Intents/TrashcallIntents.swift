@@ -8,7 +8,7 @@ public struct AddBlockNumberIntent: AppIntent {
     public static let title: LocalizedStringResource = "添加号码到 Trashcall 黑名单"
     public static let description = IntentDescription("将指定的电话号码或号段添加到 Trashcall 自动挂断黑名单，并重载系统拦截。")
 
-    @Parameter(title: "电话号码或号段", description: "例如 18964046784、9521 或 0213100")
+    @Parameter(title: "电话号码或号段", description: "例如 13800138000、9521 或 0213100")
     public var phoneNumber: String
 
     public init() {
@@ -29,27 +29,32 @@ public struct AddBlockNumberIntent: AppIntent {
         try store.open(readOnly: false)
         try store.initializeSchema()
 
-        let expander = RuleExpander()
-        let resolved = PatternInput.resolved(trimmed)
-        let numbers = try expander.expandWildcard(resolved).map(\.rawValue)
-        guard !numbers.isEmpty else {
-            return .result(dialog: "未能解析到有效号码")
+        let rule = try store.addUserRule(ActiveRuleItem(pattern: trimmed, action: .block))
+        let managers = TrashcallExtensionID.all.map(CallDirectoryManagerService.init(extensionBundleIdentifier:))
+        var pending = false
+        for manager in managers {
+            guard await manager.checkStatus() == .enabled else {
+                pending = true
+                continue
+            }
+            do {
+                try await manager.reloadExtension()
+            } catch {
+                pending = true
+            }
         }
-
-        let rule = ActiveRuleItem(
-            pattern: resolved,
-            action: .block,
-            count: numbers.count
-        )
-        try store.addUserRule(rule, numbers: numbers)
-
-        // 挂断条目由专用挂断扩展注入：两个扩展都需要重载
-        for identifier in TrashcallExtensionID.all {
-            let manager = CallDirectoryManagerService(extensionBundleIdentifier: identifier)
-            try? await manager.reloadExtension()
+        #if os(iOS)
+        let revision = try store.getMetadata(key: "directory_revision")
+        for manager in managers {
+            let accepted = try store.getMetadata(key: CallDirectoryManagerService.acceptedRevisionKey(manager.extensionBundleIdentifier))
+            pending = pending || revision == nil || accepted != revision
         }
+        #endif
 
-        return .result(dialog: "已成功将 \(resolved)（\(numbers.count) 个号码）添加至 Trashcall 自动挂断黑名单！")
+        if pending {
+            return .result(dialog: "已保存 \(rule.pattern)（\(rule.count) 条）。请在 Trashcall 查看系统加载状态。")
+        }
+        return .result(dialog: "已保存 \(rule.pattern)（\(rule.count) 条），系统已加载。")
     }
 }
 

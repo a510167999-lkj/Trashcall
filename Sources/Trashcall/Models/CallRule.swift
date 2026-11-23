@@ -65,6 +65,7 @@ public struct CallRule: Identifiable, Hashable, Sendable {
 public enum RuleActionType: String, CaseIterable, Identifiable, Codable, Sendable {
     case block = "🚫 自动挂断"
     case identify = "🏷️ 标记提醒"
+    case allow = "✓ 允许来电"
     public var id: String { rawValue }
 }
 
@@ -76,6 +77,8 @@ public struct ActiveRuleItem: Identifiable, Hashable, Codable, Sendable {
     public var label: String?
     public var count: Int
     public var createdAt: Date
+    public var updatedAt: Date { revision ?? createdAt }
+    private var revision: Date?
 
     public init(
         id: UUID = UUID(),
@@ -83,7 +86,8 @@ public struct ActiveRuleItem: Identifiable, Hashable, Codable, Sendable {
         action: RuleActionType,
         label: String? = nil,
         count: Int = 1,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        updatedAt: Date? = nil
     ) {
         self.id = id
         self.pattern = pattern
@@ -91,6 +95,7 @@ public struct ActiveRuleItem: Identifiable, Hashable, Codable, Sendable {
         self.label = label
         self.count = count
         self.createdAt = createdAt
+        self.revision = updatedAt
     }
 }
 

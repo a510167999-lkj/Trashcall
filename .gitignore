@@ -1,16 +1,50 @@
+# macOS System Files
 .DS_Store
+
+# Swift & Xcode Build Artifacts
 /.build
 /Packages
 xcuserdata/
 DerivedData/
+/Trashcall.ipa
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
+# Apple Developer Certificates & Provisioning Profiles (Security Protection)
+*.p12
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.p8
+*.key
+*.pem
+证书_*/
+
+# Credentials, Environment & Secrets
 .netrc
+*.env
+.env.*
+secrets.*
+config.local.*
+omissions.json
+
+# SQLite Temporary and Journal Files
 *.sqlite-wal
 *.sqlite-shm
-.workbuddy/
+*.sqlite-journal
+*.dump.sqlite
+
+# Python Cache & Upstream Crawlers
 __pycache__/
 *.py[cod]
 Server/logs/
 Server/state/
 Server/upstream/
+
+# Fastlane & Tooling
+fastlane/Appfile
+fastlane/Matchfile
+fastlane/report.xml
+
+# Workbuddy & IDE Local State
+.workbuddy/

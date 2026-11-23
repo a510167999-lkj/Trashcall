@@ -4,9 +4,19 @@ import Foundation
 import CallKit
 #endif
 
-/// Lightweight remote database update payload representation.
+public enum RemoteRulesFormat: String, Codable, Sendable {
+    case snapshot
+    case delta
+}
+
+/// Versioned official rule catalogue or a patch against a known version.
 public struct RemoteDatabaseUpdate: Codable, Sendable {
     public let version: String
+    public let format: RemoteRulesFormat?
+    public let baseVersion: String?
+    public let blockingVerified: Bool?
+    public var permitsBlocking: Bool { blockingVerified == true }
+    public var isSnapshot: Bool { format != .delta }
     public let updatedAt: String?
     public let description: String?
     public let minClientVersion: String?
@@ -17,6 +27,9 @@ public struct RemoteDatabaseUpdate: Codable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case version
+        case format
+        case baseVersion = "base_version"
+        case blockingVerified = "blocking_verified"
         case updatedAt = "updated_at"
         case description
         case minClientVersion = "min_client_version"
@@ -34,9 +47,15 @@ public struct RemoteDatabaseUpdate: Codable, Sendable {
         addedBlocking: [Int64]? = nil,
         removedBlocking: [Int64]? = nil,
         addedIdentifications: [RemoteIdentificationEntry]? = nil,
-        removedIdentifications: [Int64]? = nil
+        removedIdentifications: [Int64]? = nil,
+        format: RemoteRulesFormat = .snapshot,
+        baseVersion: String? = nil,
+        blockingVerified: Bool = true
     ) {
         self.version = version
+        self.format = format
+        self.baseVersion = baseVersion
+        self.blockingVerified = blockingVerified
         self.updatedAt = updatedAt
         self.description = description
         self.minClientVersion = minClientVersion
@@ -62,11 +81,13 @@ public enum UpdateResult: Sendable, Equatable {
     case upToDate(version: String)
     case updated(newVersion: String, addedBlocking: Int, addedIdentification: Int)
     case failed(reason: String)
+    case deferred(reason: String)
+    case savedPendingActivation(version: String, reason: String)
 
     public var isSuccess: Bool {
         switch self {
         case .upToDate, .updated: return true
-        case .failed: return false
+        case .failed, .deferred, .savedPendingActivation: return false
         }
     }
 
@@ -77,7 +98,11 @@ public enum UpdateResult: Sendable, Equatable {
         case .updated(let version, let blocking, let ident):
             return "已自动更新至 \(version)（新增挂断 \(blocking) 条，识别 \(ident) 条）"
         case .failed(let reason):
-            return "更新检查失败: \(reason)"
+            return "更新检查失败：\(reason)"
+        case .deferred(let reason):
+            return reason
+        case .savedPendingActivation(let version, let reason):
+            return "官方规则 \(version) 已保存，等待系统加载：\(reason)"
         }
     }
 }
@@ -88,7 +113,21 @@ public final class DatabaseUpdateService: @unchecked Sendable {
 
     public static let defaultEndpointURLString = "https://agentslee.online/trashcall/rules_latest.json"
 
+    private let checkGate = UpdateCheckGate()
+
     private init() {}
+
+    private actor UpdateCheckGate {
+        private var isRunning = false
+
+        func enter() -> Bool {
+            guard !isRunning else { return false }
+            isRunning = true
+            return true
+        }
+
+        func leave() { isRunning = false }
+    }
 
     public func getEndpointURL(from store: CallDirectoryStore? = nil) -> URL {
         if let store = store,
@@ -127,7 +166,7 @@ public final class DatabaseUpdateService: @unchecked Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 12.0
+        request.timeoutInterval = 30.0
         request.setValue("Trashcall-iOS", forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -149,85 +188,26 @@ public final class DatabaseUpdateService: @unchecked Sendable {
         _ update: RemoteDatabaseUpdate,
         to store: CallDirectoryStore
     ) throws -> (addedBlock: Int, addedIdent: Int) {
-        var addedBlockCount = 0
-        var addedIdentCount = 0
-
-        try store.execute(sql: "BEGIN EXCLUSIVE TRANSACTION;")
-        do {
-            // 1. Process removals
-            if let removedBlocks = update.removedBlocking, !removedBlocks.isEmpty {
-                try store.deleteBlockingBatch(removedBlocks)
-            }
-            if let removedIdents = update.removedIdentifications, !removedIdents.isEmpty {
-                try store.deleteIdentificationBatch(removedIdents)
-            }
-
-            // 2. Process additions
-            if let addedBlocks = update.addedBlocking, !addedBlocks.isEmpty {
-                try store.insertBlockingBatch(addedBlocks)
-                try store.deleteIdentificationBatch(addedBlocks)
-                addedBlockCount = addedBlocks.count
-            }
-
-            if let addedIdents = update.addedIdentifications, !addedIdents.isEmpty {
-                let entries = addedIdents.map { IdentificationEntry(phoneNumber: $0.phone, label: $0.label) }
-                try store.insertIdentificationBatch(entries)
-                addedIdentCount = entries.count
-            }
-
-            // 3. Keep blocking and identification mutually exclusive
-            try store.execute(sql: """
-            DELETE FROM identification_numbers
-            WHERE phone_number IN (SELECT phone_number FROM blocking_numbers);
-            """)
-
-            // 4. Update metadata
-            try store.setMetadata(key: "cloud_rules_version", value: update.version)
-            try store.setMetadata(key: "last_update_check_at", value: "\(Date().timeIntervalSince1970)")
-
-            // 5. Re-apply any enabled protection strategies so user choices remain intact
-            for strategy in ProtectionStrategy.allCases {
-                if store.isStrategyEnabled(strategy) {
-                    let cond = strategy.conditionSQL
-                    let moveSql = """
-                    INSERT OR IGNORE INTO blocking_numbers (phone_number)
-                    SELECT phone_number FROM identification_numbers
-                    WHERE \(cond);
-                    DELETE FROM identification_numbers
-                    WHERE \(cond);
-                    """
-                    try store.execute(sql: moveSql)
-                }
-            }
-
-            // 6. Re-apply user custom rules so personal blacklists are never overridden
-            if let userRules = try? store.getUserRules() {
-                let expander = RuleExpander()
-                for rule in userRules {
-                    let numbers = (try? expander.expandWildcard(rule.pattern).map(\.rawValue)) ?? []
-                    guard !numbers.isEmpty else { continue }
-                    if rule.action == .block {
-                        try store.insertBlockingBatch(numbers)
-                        try store.insertUserBlockingBatch(numbers)
-                        try store.deleteIdentificationBatch(numbers)
-                    } else {
-                        let label = rule.label ?? "自定义标记"
-                        let entries = numbers.map { IdentificationEntry(phoneNumber: $0, label: label) }
-                        try store.insertIdentificationBatch(entries)
-                        try store.deleteBlockingBatch(numbers)
-                        try store.deleteUserBlockingBatch(numbers)
-                    }
-                }
-            }
-
-            try store.execute(sql: "COMMIT TRANSACTION;")
-            store.checkpoint()
-        } catch {
-            try? store.execute(sql: "ROLLBACK TRANSACTION;")
-            throw error
+        let blocked = update.addedBlocking ?? []
+        let identified = update.addedIdentifications ?? []
+        let allNumbers = blocked + identified.map(\.phone) + (update.removedBlocking ?? []) + (update.removedIdentifications ?? [])
+        guard !update.version.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              allNumbers.allSatisfy({ (1_000_000...999_999_999_999_999).contains($0) }),
+              identified.allSatisfy({ !$0.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !$0.label.contains("\0") }) else {
+            throw StoreError.invalidRule("官方规则含无效的版本、号码或标签。")
         }
-
-        return (addedBlockCount, addedIdentCount)
+        if let minimum = update.minClientVersion,
+           let installed = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+           installed.compare(minimum, options: .numeric) == .orderedAscending {
+            throw StoreError.invalidRule("规则库要求 Trashcall \(minimum) 或更新版本。")
+        }
+        try store.applyOfficialRules(update)
+        let blockingNumbers = Set(blocked)
+        let identificationNumbers = Set(identified.map(\.phone))
+        if update.permitsBlocking {
+            return (blockingNumbers.count, identificationNumbers.subtracting(blockingNumbers).count)
+        }
+        return (0, identificationNumbers.union(blockingNumbers).count)
     }
 
     /// Check and automatically perform an update.
@@ -239,6 +219,17 @@ public final class DatabaseUpdateService: @unchecked Sendable {
         storeURL: URL = DatabaseBootstrap.databaseURL(),
         force: Bool = false,
         reloadExtensions: (@Sendable () async -> [Error])? = nil
+    ) async -> UpdateResult {
+        guard await checkGate.enter() else { return .deferred(reason: "正在检查官方规则更新。") }
+        let result = await runUpdateCheck(storeURL: storeURL, force: force, reloadExtensions: reloadExtensions)
+        await checkGate.leave()
+        return result
+    }
+
+    private func runUpdateCheck(
+        storeURL: URL,
+        force: Bool,
+        reloadExtensions: (@Sendable () async -> [Error])?
     ) async -> UpdateResult {
         let store = CallDirectoryStore(databaseURL: storeURL)
         do {
@@ -273,7 +264,12 @@ public final class DatabaseUpdateService: @unchecked Sendable {
         }
 
         let currentVersion = getCloudRulesVersion(in: store)
-        if !force && currentVersion == remoteUpdate.version {
+        if !force, (try? store.getMetadata(key: "withdrawn_cloud_rules_version")) == remoteUpdate.version {
+            try? store.setMetadata(key: "last_update_check_at", value: "\(Date().timeIntervalSince1970)")
+            return .deferred(reason: "此版本已回滚。可手动检查以重新应用。")
+        }
+        if !force, currentVersion == remoteUpdate.version,
+           (try? store.getMetadata(key: "cloud_rule_sources_confirmed")) == "1" {
             try? store.setMetadata(key: "last_update_check_at", value: "\(Date().timeIntervalSince1970)")
             return .upToDate(version: remoteUpdate.version)
         }
@@ -281,8 +277,12 @@ public final class DatabaseUpdateService: @unchecked Sendable {
         do {
             let (addedBlock, addedIdent) = try applyUpdate(remoteUpdate, to: store)
             // Reload CallKit extensions
-            if let reload = reloadExtensions {
-                _ = await reload()
+            if let reloadExtensions {
+                let errors = await reloadExtensions()
+                if !errors.isEmpty {
+                    return .savedPendingActivation(version: remoteUpdate.version,
+                                                   reason: errors.map(\.localizedDescription).joined(separator: "；"))
+                }
             }
             return .updated(
                 newVersion: remoteUpdate.version,

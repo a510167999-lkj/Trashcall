@@ -10,7 +10,7 @@ open class TrashcallCallDirectoryProvider: CXCallDirectoryProvider {
     /// Override this to return your shared App Group container identifier.
     /// Example: "group.com.yourcompany.trashcall"
     open var appGroupIdentifier: String {
-        return "group.com.trashcall.shared"
+        return DatabaseBootstrap.appGroupId
     }
 
     open var databaseFileName: String {
@@ -35,29 +35,46 @@ open class TrashcallCallDirectoryProvider: CXCallDirectoryProvider {
             feedKind: feedKind.rawValue
         )
 
-        guard let groupURL = FileManager.default.containerURL(
+        let groupURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupIdentifier
-        ) else {
+        )
+        report.appGroupOK = (groupURL != nil)
+
+        let dbURL: URL
+        let isReadOnly: Bool
+        if groupURL != nil {
+            dbURL = DatabaseBootstrap.databaseURL()
+            isReadOnly = false
+        } else if let seedURL = DatabaseBootstrap.bundledSeedURL() {
+            // Sideload fallback: App Group is unavailable (e.g. free personal Apple ID).
+            // Fall back to reading the bundled seed database directly so CallKit can still
+            // protect calls with the 410,000+ offline spam database.
+            dbURL = seedURL
+            isReadOnly = true
+        } else {
             let error = NSError(
                 domain: "com.trashcall.error",
                 code: 1001,
-                userInfo: [NSLocalizedDescriptionKey: "无法获取 App Group 共享目录容器: \(appGroupIdentifier)"]
+                userInfo: [NSLocalizedDescriptionKey: "无法获取数据库: App Group 未授权且未找到内置种子库"]
             )
             report.error = error.localizedDescription
             report.save(fileName: runReportFileName)
             context.cancelRequest(withError: error)
             return
         }
-        report.appGroupOK = true
 
-        let dbURL = DatabaseBootstrap.databaseURL()
         report.dbExists = FileManager.default.fileExists(atPath: dbURL.path)
         let store = CallDirectoryStore(databaseURL: dbURL)
 
         do {
-            // Read-write so the extension can see WAL; do not create an empty DB here.
-            try store.open(readOnly: false, createIfNeeded: false)
-            try store.initializeSchema()
+            // Read-write so the extension can see WAL when using App Group; read-only for seed fallback
+            try store.open(readOnly: isReadOnly, createIfNeeded: false)
+            if !isReadOnly {
+                try store.initializeSchema()
+            }
+            try store.execute(sql: "BEGIN DEFERRED;")
+            defer { try? store.execute(sql: "ROLLBACK;") }
+            report.directoryRevision = try store.getMetadata(key: "directory_revision")
             switch feedKind {
             case .identificationOnly:
                 report.blockingFed = 0
@@ -74,9 +91,12 @@ open class TrashcallCallDirectoryProvider: CXCallDirectoryProvider {
             }
 
             let feeder = CallDirectoryFeeder()
-            let contextAdapter = CXCallDirectoryContextAdapter(context: context)
+            let completedReport = report
+            let reportFileName = runReportFileName
+            let contextAdapter = CXCallDirectoryContextAdapter(context: context) {
+                completedReport.save(fileName: reportFileName)
+            }
             try feeder.feed(kind: feedKind, from: store, into: contextAdapter)
-            report.save(fileName: runReportFileName)
         } catch {
             report.error = error.localizedDescription
             report.save(fileName: runReportFileName)
@@ -102,8 +122,11 @@ extension TrashcallCallDirectoryProvider: CXCallDirectoryExtensionContextDelegat
 final class CXCallDirectoryContextAdapter: CallDirectoryContextProtocol {
     private let context: CXCallDirectoryExtensionContext
 
-    init(context: CXCallDirectoryExtensionContext) {
+    private let reportSubmission: () -> Void
+
+    init(context: CXCallDirectoryExtensionContext, reportSubmission: @escaping () -> Void) {
         self.context = context
+        self.reportSubmission = reportSubmission
     }
 
     var isIncrementalUpdate: Bool {
@@ -135,6 +158,7 @@ final class CXCallDirectoryContextAdapter: CallDirectoryContextProtocol {
     }
 
     func completeRequest() {
+        reportSubmission()
         context.completeRequest()
     }
 }
